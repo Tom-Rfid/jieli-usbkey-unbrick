@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jieli-usbkey-unbrick — bring a bricked JieLi device back through its USB cable</title>
+<meta name="description" content="A firmware that won't boot does not mean a dead keyboard. Open the JieLi chip's factory USB loader from a Raspberry Pi, through the device's own cable, without opening it.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #edf1ef;          /* cool grey-green, like a bench mat */
+    --ink: #1d2422;
+    --muted: #55605c;
+    --copper: #a8602c;         /* the accent: bare copper, solder */
+    --wire-red: #cf3a2e;
+    --wire-green: #1e8a4c;
+    --wire-white: #ffffff;
+    --wire-black: #1d2422;
+    --rule: #c9d1cd;
+    --panel: #e3e9e6;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .pulse { animation: none !important; } }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Archivo", system-ui, sans-serif; font-size: 18px; line-height: 1.55;
+    font-variation-settings: "wdth" 100;
+  }
+  a { color: var(--copper); text-underline-offset: 3px; }
+  a:hover { color: var(--ink); }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--copper); outline-offset: 3px; border-radius: 2px; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  .col { max-width: 68ch; }
+
+  nav.lang { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; font-size: 15px; }
+  nav.lang .name { font-family: "JetBrains Mono", monospace; font-size: 14px; color: var(--muted); }
+  nav.lang a { margin-left: 18px; }
+
+  header.hero { padding: 28px 0 8px; }
+  h1 {
+    font-size: clamp(40px, 7vw, 76px); line-height: 0.98; margin: 0 0 22px;
+    font-variation-settings: "wdth" 70; font-weight: 800; letter-spacing: -0.5px; max-width: 14ch;
+  }
+  .lede { font-size: 21px; color: var(--ink); max-width: 56ch; margin: 0 0 8px; }
+  .lede + p { color: var(--muted); max-width: 60ch; margin-top: 6px; }
+
+  figure.cable { margin: 34px 0 10px; overflow-x: auto; }
+  @media (max-width: 720px) { figure.cable svg { min-width: 680px; } }
+  figure.cable svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: "Archivo", system-ui, sans-serif; }
+  svg text.mono { font-family: "JetBrains Mono", monospace; }
+  figure.cable figcaption { font-size: 15px; color: var(--muted); max-width: 64ch; }
+
+  section { padding: 46px 0 6px; border-top: 1px solid var(--rule); margin-top: 40px; }
+  h2 { font-size: 34px; line-height: 1.1; margin: 0 0 16px; font-variation-settings: "wdth" 80; font-weight: 750; }
+  h3 { font-size: 21px; margin: 28px 0 8px; font-variation-settings: "wdth" 90; }
+  p { margin: 0 0 14px; }
+
+  ul.kit { list-style: none; padding: 0; margin: 12px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 2px 28px; }
+  ul.kit li { display: grid; grid-template-columns: 44px 1fr; gap: 10px; padding: 12px 0; border-bottom: 1px dashed var(--rule); }
+  ul.kit .ico { width: 44px; height: 44px; }
+  ul.kit b { display: block; font-weight: 650; }
+  ul.kit span { color: var(--muted); font-size: 15.5px; }
+
+  ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 10px 0 0; }
+  ol.steps li { counter-increment: s; position: relative; padding: 12px 0 12px 58px; }
+  ol.steps li::before {
+    content: counter(s); position: absolute; left: 0; top: 10px; width: 38px; height: 38px; border-radius: 50%;
+    border: 2px solid var(--copper); color: var(--copper); display: grid; place-items: center;
+    font-weight: 750; font-size: 17px;
+  }
+  code, pre { font-family: "JetBrains Mono", monospace; font-size: 15px; }
+  code { background: var(--panel); padding: 1px 6px; border-radius: 3px; }
+  pre { background: var(--ink); color: #e8eeeb; padding: 16px 18px; border-radius: 6px; overflow-x: auto; margin: 10px 0 16px; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 16px; margin: 8px 0 18px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 650; color: var(--muted); }
+  .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: -1px; border: 1.5px solid var(--ink); }
+
+  .state { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; margin: 14px 0 6px; border-top: 3px solid var(--ink); }
+  .state div { padding: 12px 16px 12px 0; }
+  .state b { display: block; font-size: 15px; margin-bottom: 4px; }
+  .state p { font-size: 15.5px; color: var(--muted); margin: 0; }
+  @media (max-width: 720px) { .state { grid-template-columns: 1fr; } }
+
+  .callout { border-left: 4px solid var(--copper); padding: 4px 0 4px 18px; margin: 18px 0; max-width: 64ch; }
+
+  .projects { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 14px; }
+  .projects a.p { display: block; text-decoration: none; color: var(--ink); padding: 18px 0 16px; border-top: 3px solid var(--wire-green); }
+  .projects a.p:hover h3 { color: var(--copper); }
+  .projects h3 { margin: 0 0 6px; }
+  .projects p { color: var(--muted); font-size: 16px; margin: 0; }
+  @media (max-width: 720px) { .projects { grid-template-columns: 1fr; } }
+
+  .fr { margin-top: 70px; padding-top: 30px; border-top: 6px solid var(--ink); }
+  footer { padding: 46px 0 60px; color: var(--muted); font-size: 15px; }
+  .pulse { animation: pulse 1.6s ease-in-out 1 0.6s; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 40% { opacity: 0.25; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="lang" aria-label="Language">
+  <span class="name">jieli-usbkey-unbrick</span>
+  <span><a href="#en" lang="en">English</a><a href="#fr" lang="fr">Français</a><a href="https://github.com/Tom-Rfid/jieli-usbkey-unbrick">GitHub</a></span>
+</nav>
+
+<main>
+<article id="en" lang="en">
+<header class="hero">
+  <h1>Your keyboard is not dead. It just needs a key.</h1>
+  <p class="lede">A firmware that crashes at start-up leaves a JieLi-based device silent over USB. This brings it back
+  through its own USB cable, from a Raspberry Pi, without opening it.</p>
+  <p>Made for the M-VAVE SMK-37 and FM-1. Inside their chip, a factory loader still waits in the ROM; a short pattern
+  on two USB wires wakes it up. Once it is awake, any flasher can rewrite the firmware.</p>
+
+  <figure class="cable">
+    <svg viewBox="0 0 960 330" role="img" aria-labelledby="cable-en-t cable-en-d">
+      <title id="cable-en-t">The wiring</title>
+      <desc id="cable-en-d">A USB cable runs from the Raspberry Pi's USB port to the device. Red 5 volts and black ground pass straight through; black also goes to pin 9. Green D plus goes through a 100 ohm resistor to pin 11, GPIO 17. White D minus goes through a 100 ohm resistor to pin 13, GPIO 27. The red wire never touches the GPIO.</desc>
+      <!-- plugs -->
+      <rect x="8" y="34" width="96" height="150" rx="6" fill="#d7dedb" stroke="#1d2422" stroke-width="2"/>
+      <text x="56" y="22" text-anchor="middle" font-size="15" fill="#1d2422">USB-A</text>
+      <text x="56" y="204" text-anchor="middle" font-size="13" fill="#55605c">in the Pi</text>
+      <rect x="856" y="34" width="96" height="150" rx="16" fill="#d7dedb" stroke="#1d2422" stroke-width="2"/>
+      <text x="904" y="22" text-anchor="middle" font-size="15" fill="#1d2422">USB-C</text>
+      <text x="904" y="204" text-anchor="middle" font-size="13" fill="#55605c">the device</text>
+      <!-- the four wires -->
+      <g stroke-width="9" stroke-linecap="round" fill="none">
+        <path d="M104 60 H856" stroke="#cf3a2e"/>
+        <path d="M104 94 H856" stroke="#1d2422"/>
+        <path d="M104 128 H856" stroke="#1e8a4c"/>
+        <path d="M104 162 H856" stroke="#1d2422"/>
+        <path d="M104 162 H856" stroke="#ffffff" stroke-width="6"/>
+      </g>
+      <g font-size="14" fill="#1d2422">
+        <text x="120" y="52">5 V — never to the Pi's pins</text>
+        <text x="120" y="86">GND</text>
+        <text x="120" y="120">D+</text>
+        <text x="120" y="154">D−</text>
+      </g>
+      <!-- taps: copper solder joints -->
+      <g stroke-width="4" fill="none" stroke-linecap="round">
+        <path d="M430 94 V286" stroke="#1d2422"/>
+        <path d="M510 128 V200 M510 236 V286" stroke="#1e8a4c"/>
+        <path d="M590 162 V200 M590 236 V286" stroke="#55605c"/>
+      </g>
+      <g fill="#a8602c"><circle cx="430" cy="94" r="7"/><circle cx="510" cy="128" r="7"/><circle cx="590" cy="162" r="7"/></g>
+      <!-- resistors -->
+      <g fill="#f4f6f5" stroke="#1d2422" stroke-width="2">
+        <rect x="496" y="200" width="28" height="36" rx="5"/><rect x="576" y="200" width="28" height="36" rx="5"/>
+      </g>
+      <g font-size="13" fill="#1d2422">
+        <text x="532" y="223">100 Ω</text><text x="612" y="223">100 Ω</text>
+      </g>
+      <!-- Pi header -->
+      <rect x="380" y="286" width="270" height="36" rx="4" fill="#1e8a4c" opacity="0.18" stroke="#1e8a4c" stroke-width="2"/>
+      <g font-size="13" fill="#1d2422" text-anchor="middle">
+        <text class="mono" x="430" y="309">pin 9</text><text class="mono" x="510" y="309">pin 11</text><text class="mono" x="590" y="309">pin 13</text>
+      </g>
+      <text x="664" y="309" font-size="14" fill="#55605c">Raspberry Pi header: GND · GPIO17 · GPIO27</text>
+    </svg>
+    <figcaption>The whole hardware side: the Pi stays at one end of the cable as the USB host, and borrows the two data
+    wires for a moment to send the key. The copper dots are the three solder joints.</figcaption>
+  </figure>
+</header>
+
+<section aria-labelledby="kit-en">
+  <h2 id="kit-en">What you need</h2>
+  <p class="col">Nothing exotic, and nothing to unscrew on the keyboard.</p>
+  <ul class="kit">
+    <li><svg class="ico" viewBox="0 0 44 44" aria-hidden="true"><rect x="6" y="10" width="32" height="24" rx="3" fill="#1e8a4c" opacity=".2" stroke="#1e8a4c" stroke-width="2"/><g fill="#1d2422"><circle cx="14" cy="16" r="2"/><circle cx="20" cy="16" r="2"/><circle cx="26" cy="16" r="2"/><circle cx="32" cy="16" r="2"/></g></svg>
+      <div><b>A Raspberry Pi</b><span>Pi 5 tested. Pi 4 and Pi 3 have the same pins and should work (Pi 3: use the 64-bit Raspberry Pi OS).</span></div></li>
+    <li><svg class="ico" viewBox="0 0 44 44" aria-hidden="true"><rect x="4" y="15" width="12" height="14" rx="2" fill="#d7dedb" stroke="#1d2422" stroke-width="2"/><path d="M16 22 C26 22 22 30 40 30" stroke="#1d2422" stroke-width="4" fill="none"/></svg>
+      <div><b>An old USB cable</b><span>USB-A to USB-C (or whatever plug your device has), a data cable, not a charge-only one. It gets opened, so not your best one.</span></div></li>
+    <li><svg class="ico" viewBox="0 0 44 44" aria-hidden="true"><path d="M4 22 H12 M32 22 H40" stroke="#1d2422" stroke-width="3"/><rect x="12" y="16" width="20" height="12" rx="5" fill="#e8d3b5" stroke="#1d2422" stroke-width="2"/><path d="M17 16 V28 M22 16 V28 M27 16 V28" stroke="#a8602c" stroke-width="2"/></svg>
+      <div><b>Two 100 Ω resistors</b><span>On D+ and D−: they protect the Pi and the chip if something is wrong. Any small ¼ W ones.</span></div></li>
+    <li><svg class="ico" viewBox="0 0 44 44" aria-hidden="true"><path d="M6 12 C16 18 10 26 20 30 S30 34 38 32" stroke="#cf3a2e" stroke-width="3" fill="none"/><path d="M6 20 C14 24 16 32 38 26" stroke="#1d2422" stroke-width="3" fill="none"/></svg>
+      <div><b>Three short wires</b><span>Female Dupont jumpers are easiest: they push onto the Pi's pins.</span></div></li>
+    <li><svg class="ico" viewBox="0 0 44 44" aria-hidden="true"><path d="M8 36 L26 18" stroke="#1d2422" stroke-width="6" stroke-linecap="round"/><path d="M26 18 L36 8" stroke="#a8602c" stroke-width="3" stroke-linecap="round"/><circle cx="37" cy="31" r="4" fill="#b9c1bd"/></svg>
+      <div><b>A soldering iron and solder</b><span>Three joints on the cable's wires, then tape or heat-shrink over each. 3-way Wago connectors work too, without soldering.</span></div></li>
+    <li><svg class="ico" viewBox="0 0 44 44" aria-hidden="true"><path d="M10 8 L22 24 L34 8" stroke="#1d2422" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M22 24 V38" stroke="#1d2422" stroke-width="3"/><circle cx="22" cy="24" r="3" fill="#a8602c"/></svg>
+      <div><b>Pliers or a wire stripper</b><span>To open the cable's jacket in the middle and bare the four thin wires without cutting them.</span></div></li>
+    <li><svg class="ico" viewBox="0 0 44 44" aria-hidden="true"><rect x="10" y="4" width="24" height="34" rx="4" fill="#f2c94c" stroke="#1d2422" stroke-width="2"/><rect x="14" y="8" width="16" height="9" fill="#d7dedb" stroke="#1d2422" stroke-width="1.5"/><circle cx="22" cy="28" r="5" fill="none" stroke="#1d2422" stroke-width="2"/></svg>
+      <div><b>A multimeter</b><span>For one check before you solder: which colour is really D+ and D− (cheap cables don't always follow the colours).</span></div></li>
+  </ul>
+</section>
+
+<section aria-labelledby="how-en">
+  <h2 id="how-en">How it goes</h2>
+  <ol class="steps col">
+    <li><b>Check the cable.</b> Multimeter in beep mode, cable unplugged, USB-A plug facing you, plastic tongue down:
+      contact 1 is 5 V (red), 2 is D− (white), 3 is D+ (green), 4 is GND (black). Trust the beep, not the colour.</li>
+    <li><b>Wire it</b> as drawn above: black to pin 9, green through 100 Ω to pin 11, white through 100 Ω to pin 13.
+      The red wire is never connected to the Pi's pins.</li>
+    <li><b>Run the rescue script</b> on the Pi. Its menu installs everything, shows the wiring, then guides each step.
+<pre>git clone https://github.com/Tom-Rfid/jieli-usbkey-unbrick
+cd jieli-usbkey-unbrick
+./rescue-en.sh</pre></li>
+    <li><b>Send the key.</b> The device switched off and plugged into the Pi through your cable, choose “send the key”
+      and switch the device on within six seconds. The chip catches the key and starts its USB loader.</li>
+    <li><b>See it appear.</b> <code>lsusb</code> shows <code>4c4a:8057</code>, a device called <code>WL80UBOOT1.00</code>.
+      Nothing? Switch on a little earlier or later, or try the slower key in the settings.</li>
+    <li><b>Back up the whole flash first.</b> One megabyte, kept on a USB stick too. It holds your unit's key
+      calibration: never restore another unit's backup onto yours.</li>
+    <li><b>Write a firmware</b> with <a href="https://github.com/jvitkauskas/m-flasher">M-Flasher</a>: the maker's, or one
+      of the two below. The bootloader, the key calibration and the Bluetooth pairings are left alone.</li>
+  </ol>
+  <p class="callout col">The hard part is getting the chip to answer again. Once it shows up as a USB loader, writing a firmware is
+  the ordinary job flashers already do well; this project is about the first part.</p>
+</section>
+
+<section aria-labelledby="state-en">
+  <h2 id="state-en">What has been tested</h2>
+  <div class="state">
+    <div><b>Works</b><p>M-VAVE SMK-37 Elite with a Raspberry Pi 5: key, backup, firmware written, keyboard back (November 2026).</p></div>
+    <div><b>Should work</b><p>FM-1, SMK-37 Pro (same chip family, supported by M-Flasher); Raspberry Pi 4 and 3.</p></div>
+    <div><b>Needs you</b><p>The key from a Pico (RP2040), on Linux and maybe Windows. Report what works.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="pico-en">
+  <h2 id="pico-en">No Raspberry Pi? The Pico variant</h2>
+  <div class="col">
+    <p>A Raspberry Pi Pico (RP2040, a few euros) can send the key instead. It only sends the key: a computer stays at the
+    other end of the cable as the USB host, sees the loader and runs the flasher. Same cable, same two resistors:
+    green to GP6 (pin 9), white to GP7 (pin 10), black to GND (pin 38), red never.</p>
+    <p>Run <code>rp2040/usb_key.py</code> in Thonny (MicroPython), switch the device on within six seconds, then look
+    for <code>4c4a:</code> in <code>lsusb</code>. On Linux the rescue script drives the rest
+    (<code>KEY_SOURCE=pico</code>). On Windows it should work too, with M-Flasher and a WinUSB driver for the loader,
+    but nobody has tried it yet.</p>
+    <p>This variant is prepared and <b>not tested</b>. If you try it, open an issue with your Pico, your device and what
+    happened, or fork it and make it yours: a Windows guide would help a lot of people.</p>
+  </div>
+</section>
+
+<section aria-labelledby="faq-en">
+  <h2 id="faq-en">Questions</h2>
+  <div class="col">
+    <h3>Do I have to open the keyboard?</h3>
+    <p>No. Everything goes through the USB cable. On these boards the flash sits inside the JieLi chip anyway, so there
+    is no flash chip to short.</p>
+    <h3>Does a Raspberry Pi 3 work?</h3>
+    <p>It should: the same 40-pin header, the same GPIO17 and GPIO27, and its USB ports are fine for the loader. Install
+    the 64-bit Raspberry Pi OS, because M-Flasher's Linux package is built for arm64. Not tested yet; tell us.</p>
+    <h3>Which devices?</h3>
+    <p>Made for the M-VAVE SMK-37 and FM-1. Other JieLi devices answer the same key; the rest depends on the flasher.</p>
+    <h3>Is it safe?</h3>
+    <p>The resistors limit any mistake, the backup comes before anything is written, and the 5 V wire never meets the
+    Pi's pins. Still: at your own risk, and not affiliated with M-VAVE or JieLi.</p>
+  </div>
+</section>
+
+<section aria-labelledby="fw-en">
+  <h2 id="fw-en">Something to put on it</h2>
+  <p class="col">Brought back to life? These are open firmwares for the same two instruments: a live-first synth, loops,
+  scenes and performance gestures, on the keyboard you just rescued.</p>
+  <div class="projects">
+    <a class="p" href="https://github.com/Tom-Rfid/OpenVALive_FM-1"><h3>OpenVALive for the FM-1</h3><p>Four looping tracks and a live line, virtual analog and drums, scenes, Morph. MIT.</p></a>
+    <a class="p" href="https://github.com/Tom-Rfid/OpenVALive_SMK-37"><h3>OpenVALive for the SMK-37</h3><p>The same instrument on 37 keys, pads, faders and wheels.</p></a>
+  </div>
+</section>
+
+<section aria-labelledby="thanks-en">
+  <h2 id="thanks-en">Thanks</h2>
+  <p class="col"><a href="https://kagaimiq.github.io/jielie/isp/usb/usb-key.html">kagaimiq / jielie</a> documented the
+  USB key; <a href="https://github.com/kagaimiq/jl-uboot-tool">jl-uboot-tool</a> speaks the loader's protocol;
+  <a href="https://github.com/jvitkauskas/m-flasher">M-Flasher</a> by jvitkauskas reads and writes the FM-1 and the
+  SMK-37. This repository's own code (the scripts, the Pico key) is MIT; the tools it downloads keep their own licences.</p>
+</section>
+</article>
+
+<article id="fr" class="fr" lang="fr">
+<header class="hero">
+  <h1>Ton clavier n'est pas mort. Il lui faut juste une clé.</h1>
+  <p class="lede">Un firmware qui plante au démarrage rend un appareil JieLi muet en USB. Ceci le ramène par son propre
+  câble USB, depuis un Raspberry Pi, sans l'ouvrir.</p>
+  <p>Fait pour les M-VAVE SMK-37 et FM-1. Dans leur puce, un chargeur d'usine attend encore dans la ROM ; un court
+  motif sur deux fils USB le réveille. Une fois réveillé, n'importe quel outil de flash peut réécrire le firmware.</p>
+  <p>Le câblage est le schéma <a href="#en">en haut de la page</a> : noir sur la broche 9, vert par 100 Ω sur la
+  broche 11 (GPIO17), blanc par 100 Ω sur la broche 13 (GPIO27), le rouge jamais.</p>
+</header>
+
+<section aria-labelledby="kit-fr">
+  <h2 id="kit-fr">Le matériel</h2>
+  <table>
+    <tr><th>Quoi</th><th>Pour quoi faire</th></tr>
+    <tr><td>Un Raspberry Pi</td><td>Pi 5 testé. Pi 4 et Pi 3 ont les mêmes broches et devraient marcher (Pi 3 : Raspberry Pi OS 64 bits).</td></tr>
+    <tr><td>Un vieux câble USB</td><td>USB-A vers USB-C (ou la prise de ton appareil), un câble de données, pas seulement de charge. Il sera ouvert.</td></tr>
+    <tr><td>Deux résistances de 100 Ω</td><td>Sur D+ et D− : elles protègent le Pi et la puce en cas d'erreur. Des ¼ W suffisent.</td></tr>
+    <tr><td>Trois fils courts</td><td>Des Dupont femelles, qui s'enfichent sur les broches du Pi.</td></tr>
+    <tr><td>Un fer à souder et de l'étain</td><td>Trois soudures sur les fils du câble, puis du scotch ou de la gaine. Des Wago 3 entrées marchent aussi, sans souder.</td></tr>
+    <tr><td>Une pince ou une pince à dénuder</td><td>Pour ouvrir la gaine au milieu et dénuder les quatre petits fils sans les couper.</td></tr>
+    <tr><td>Un multimètre</td><td>Une vérification avant de souder : quelle couleur est vraiment D+ et D−.</td></tr>
+  </table>
+</section>
+
+<section aria-labelledby="how-fr">
+  <h2 id="how-fr">Les étapes</h2>
+  <ol class="steps col">
+    <li><b>Vérifier le câble.</b> Multimètre en bip, câble débranché, prise USB-A face à toi, languette plastique en bas :
+      contact 1 = 5 V (rouge), 2 = D− (blanc), 3 = D+ (vert), 4 = GND (noir). Crois le bip, pas la couleur.</li>
+    <li><b>Câbler</b> comme le schéma : noir sur la broche 9, vert par 100 Ω sur la 11, blanc par 100 Ω sur la 13.
+      Le rouge ne touche jamais les broches du Pi.</li>
+    <li><b>Lancer le script</b> sur le Pi : son menu installe tout, montre le câblage et guide chaque étape.
+<pre>git clone https://github.com/Tom-Rfid/jieli-usbkey-unbrick
+cd jieli-usbkey-unbrick
+./rescue-fr.sh</pre></li>
+    <li><b>Envoyer la clé.</b> Appareil éteint et branché au Pi par ton câble, choisis « envoyer la clé » et allume
+      l'appareil dans les six secondes. La puce attrape la clé et lance son chargeur USB.</li>
+    <li><b>Le voir apparaître.</b> <code>lsusb</code> montre <code>4c4a:8057</code>, un appareil
+      <code>WL80UBOOT1.00</code>. Rien ? Allume un peu plus tôt ou plus tard, ou essaie la clé plus lente dans les réglages.</li>
+    <li><b>Sauvegarder toute la flash d'abord.</b> Un mégaoctet, à garder aussi sur une clé USB. Elle contient la
+      calibration des touches de ton appareil : ne remets jamais la sauvegarde d'un autre.</li>
+    <li><b>Écrire un firmware</b> avec <a href="https://github.com/jvitkauskas/m-flasher">M-Flasher</a> : celui du
+      fabricant, ou l'un des deux plus bas. Le bootloader, la calibration et les appairages Bluetooth ne sont pas touchés.</li>
+  </ol>
+  <p class="callout col">Le plus dur, c'est de faire répondre la puce. Une fois qu'elle apparaît en chargeur USB, écrire
+  un firmware est le travail ordinaire que les outils de flash font déjà bien ; ce projet s'occupe de la première partie.</p>
+</section>
+
+<section aria-labelledby="state-fr">
+  <h2 id="state-fr">Ce qui a été testé</h2>
+  <div class="state">
+    <div><b>Marche</b><p>M-VAVE SMK-37 Elite avec un Raspberry Pi 5 : clé, sauvegarde, firmware écrit, clavier revenu (novembre 2026).</p></div>
+    <div><b>Devrait marcher</b><p>FM-1, SMK-37 Pro (même famille de puce, gérés par M-Flasher) ; Raspberry Pi 4 et 3.</p></div>
+    <div><b>Besoin de toi</b><p>La clé depuis un Pico (RP2040), sous Linux et peut-être Windows. Dis ce qui marche.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="pico-fr">
+  <h2 id="pico-fr">Pas de Raspberry Pi ? La variante Pico</h2>
+  <div class="col">
+    <p>Un Raspberry Pi Pico (RP2040, quelques euros) peut envoyer la clé à la place. Il n'envoie que la clé : un
+    ordinateur reste à l'autre bout du câble comme hôte USB, voit le chargeur et lance le flash. Même câble, mêmes
+    résistances : vert sur GP6 (broche 9), blanc sur GP7 (broche 10), noir sur GND (broche 38), le rouge jamais.</p>
+    <p>Lance <code>rp2040/usb_key.py</code> dans Thonny (MicroPython), allume l'appareil dans les six secondes, puis
+    cherche <code>4c4a:</code> dans <code>lsusb</code>. Sous Linux, le script fait le reste (<code>KEY_SOURCE=pico</code>).
+    Sous Windows ça devrait marcher aussi, avec M-Flasher et un pilote WinUSB pour le chargeur, mais personne ne l'a
+    encore essayé.</p>
+    <p>Cette variante est prête et <b>pas testée</b>. Si tu l'essaies, ouvre une issue avec ton Pico, ton appareil et ce
+    qui s'est passé, ou fais un fork : un guide Windows aiderait beaucoup de monde.</p>
+  </div>
+</section>
+
+<section aria-labelledby="faq-fr">
+  <h2 id="faq-fr">Questions</h2>
+  <div class="col">
+    <h3>Faut-il ouvrir le clavier ?</h3>
+    <p>Non. Tout passe par le câble USB. Sur ces cartes la flash est dans la puce JieLi, il n'y a donc pas de puce flash
+    à court-circuiter.</p>
+    <h3>Un Raspberry Pi 3, ça passe ?</h3>
+    <p>Normalement oui : même connecteur 40 broches, mêmes GPIO17 et GPIO27, et ses ports USB conviennent au chargeur.
+    Installe Raspberry Pi OS 64 bits, car le paquet Linux de M-Flasher est construit pour arm64. Pas encore testé : dis-nous.</p>
+    <h3>Quels appareils ?</h3>
+    <p>Fait pour les M-VAVE SMK-37 et FM-1. D'autres appareils JieLi répondent à la même clé ; la suite dépend de l'outil de flash.</p>
+    <h3>C'est sans risque ?</h3>
+    <p>Les résistances limitent une erreur, la sauvegarde passe avant toute écriture et le fil 5 V ne touche jamais les
+    broches du Pi. Malgré tout : à tes risques, sans lien avec M-VAVE ni JieLi.</p>
+  </div>
+</section>
+
+<section aria-labelledby="fw-fr">
+  <h2 id="fw-fr">Quelque chose à mettre dedans</h2>
+  <p class="col">Ton clavier revit ? Voici des firmwares libres pour ces deux instruments : un synthé pensé pour le live,
+  boucles, scènes et gestes de jeu, sur le clavier que tu viens de sauver.</p>
+  <div class="projects">
+    <a class="p" href="https://github.com/Tom-Rfid/OpenVALive_FM-1"><h3>OpenVALive pour le FM-1</h3><p>Quatre pistes en boucle et une ligne live, analogique virtuel et batteries, scènes, Morph. MIT.</p></a>
+    <a class="p" href="https://github.com/Tom-Rfid/OpenVALive_SMK-37"><h3>OpenVALive pour le SMK-37</h3><p>Le même instrument sur 37 touches, pads, faders et molettes.</p></a>
+  </div>
+</section>
+
+<section aria-labelledby="thanks-fr">
+  <h2 id="thanks-fr">Merci</h2>
+  <p class="col"><a href="https://kagaimiq.github.io/jielie/isp/usb/usb-key.html">kagaimiq / jielie</a> a documenté la
+  clé USB ; <a href="https://github.com/kagaimiq/jl-uboot-tool">jl-uboot-tool</a> parle le protocole du chargeur ;
+  <a href="https://github.com/jvitkauskas/m-flasher">M-Flasher</a> de jvitkauskas lit et écrit le FM-1 et le SMK-37.
+  Le code de ce dépôt (les scripts, la clé Pico) est sous licence MIT ; les outils qu'il télécharge gardent leur propre licence.</p>
+</section>
+</article>
+</main>
+
+<footer>
+  <p>jieli-usbkey-unbrick · <a href="https://github.com/Tom-Rfid/jieli-usbkey-unbrick">source on GitHub</a> · MIT ·
+  Not affiliated with M-VAVE or JieLi. / Sans lien avec M-VAVE ni JieLi.</p>
+</footer>
+</div>
+</body>
+</html>
