@@ -1,0 +1,445 @@
+#!/usr/bin/env bash
+# =====================================================================================================================
+#  M-VAVE SMK-37 / FM-1 : sauvetage d'un appareil qui ne démarre plus (puce JieLi, mode usine « UBOOT »)
+#  Sans ouvrir l'appareil : la « clé USB » JieLi passe par le câble USB, depuis le GPIO d'un Raspberry Pi.
+#
+#  POUR LE LANCER (sur un Raspberry Pi 4 ou 5, Raspberry Pi OS ou Ubuntu), dans le dossier du script :
+#      chmod +x rescue-fr.sh
+#      ./rescue-fr.sh
+#
+#  Ce que fait ce script, par le menu :
+#    - installe ce qu'il faut (Python, GPIO, outils USB, MIDI) et clone jl-uboot-tool
+#    - rappelle le câblage (Pi 4 et Pi 5) avec les couleurs du câble USB
+#    - envoie la « clé USB » JieLi (0x16EF) par le GPIO pour forcer la puce en mode UBOOT
+#    - vérifie si le clavier est vu (lsusb / dmesg), sauvegarde la flash (dump), garde un journal
+#    - reflashe : en mode UBOOT avec M-Flasher (interface graphique), ou en MIDI si l'appareil tourne encore
+#
+#  Rien n'est écrit dans le clavier sans que tu le demandes. Tout ce qui s'affiche est aussi gardé dans le journal.
+# =====================================================================================================================
+
+# ------------------------------------------------ réglages (modifiables ici ou en variables d'environnement) -------
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORK="${WORK:-$HERE/rescue-work}"                    # tout ce que le script crée va ici
+FIRMWARE="${FIRMWARE:-}"                              # un .fwsc précis (sinon : menu 9 pour le choisir)
+FW_SMK_ELITE="${FW_SMK_ELITE:-https://github.com/Tom-Rfid/OpenVALive_SMK-37/releases/download/preview-dev/openvalive-smk37-elite-0.0.3.fwsc}"
+FW_SMK_PRO="${FW_SMK_PRO:-https://github.com/Tom-Rfid/OpenVALive_SMK-37/releases/download/preview-dev/openvalive-smk37-pro-0.0.3.fwsc}"
+FW_FM1="${FW_FM1:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/latest/download/openvalive-0.0.3.fwsc}"
+INSTALLER_URL="${INSTALLER_URL:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/latest/download/fm1_install.py}"
+JLTOOL_GIT="${JLTOOL_GIT:-https://github.com/kagaimiq/jl-uboot-tool.git}"
+MFLASHER_VERSION="${MFLASHER_VERSION:-0.12.1}"
+DUMP_SIZE="${DUMP_SIZE:-0x100000}"                    # taille de la flash à sauvegarder (1 Mo sur le SMK-37 Elite)
+KEY_SECONDS="${KEY_SECONDS:-6}"                       # durée d'envoi de la clé
+KEY_HALF_US="${KEY_HALF_US:-10}"                      # demi-période de l'horloge en µs (10 ≈ 50 kHz ; 25 plus lent)
+GPIO_DP="${GPIO_DP:-17}"                              # D+ (horloge)  : GPIO17 = broche physique 11
+GPIO_DM="${GPIO_DM:-27}"                              # D- (données)  : GPIO27 = broche physique 13
+KEY_SOURCE="${KEY_SOURCE:-gpio}"                      # gpio : ce Raspberry Pi envoie la clé ; pico : un Pico (RP2040) l'envoie
+
+VENV="$WORK/venv"
+LOGDIR="$WORK/journaux"
+DUMPDIR="$WORK/sauvegardes"
+LOG="$LOGDIR/session-$(date +%Y%m%d-%H%M%S).txt"
+mkdir -p "$WORK" "$LOGDIR" "$DUMPDIR"
+
+# ------------------------------------------------ affichage ---------------------------------------------------------
+B=$'\e[1m'; R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; C=$'\e[36m'; M=$'\e[35m'; W=$'\e[37m'; BL=$'\e[94m'; N=$'\e[0m'
+say()  { echo -e "$*" | tee -a "$LOG"; }
+ok()   { say "${G}✔ $*${N}"; }
+warn() { say "${Y}⚠ $*${N}"; }
+err()  { say "${R}✖ $*${N}"; }
+pause(){ echo; read -rp "  Entrée pour revenir au menu… " _; }
+run()  { say "${C}\$ $*${N}"; "$@" 2>&1 | tee -a "$LOG"; return "${PIPESTATUS[0]}"; }
+title(){ clear; say "${B}${M}══════════════════════════════════════════════════════════════${N}";
+         say "${B}  SMK-37 / FM-1 — sauvetage   ·   $*${N}";
+         say "${B}${M}══════════════════════════════════════════════════════════════${N}"; }
+
+pi_model() { tr -d '\0' </proc/device-tree/model 2>/dev/null || echo "inconnu"; }
+
+# ------------------------------------------------ 1. les étapes -----------------------------------------------------
+steps() {
+  title "Les étapes, dans l'ordre"
+  cat <<EOF | tee -a "$LOG"
+
+  ${B}1.${N} Menu ${B}3${N} : installer les outils (une seule fois, il faut Internet).
+  ${B}2.${N} Menu ${B}2${N} : faire le câblage (Pi ÉTEINT pendant que tu branches les fils GPIO).
+  ${B}3.${N} Menu ${B}4${N} : interrupteur de l'appareil sur ${B}OFF${N}, Entrée, puis interrupteur sur ${B}ON${N} pendant les ${KEY_SECONDS} s.
+  ${B}4.${N} Menu ${B}5${N} : vérifier. On cherche un appareil ${B}4c4a${N} (JieLi en mode UBOOT).
+       Rien ? Recommence l'étape 3 (allume plus tôt / plus tard), puis essaie le menu ${B}8${N} (plus lent,
+       ou D+/D- inversés).
+  ${B}5.${N} Menu ${B}6${N} : ${B}SAUVEGARDE de toute la flash${N} (dump). On n'écrit RIEN avant d'avoir ce fichier.
+  ${B}6.${N} Garde le dump en lieu sûr (clé USB) et le journal (menu ${B}7${N}) : c'est ce qu'il faut pour analyser
+       et réparer, sans toucher à la calibration du clavier ni au Bluetooth.
+  ${B}7.${N} Menu ${B}9${N} : choisir le firmware (tant qu'il y a Internet, n'importe quand).
+  ${B}8.${N} Menu ${B}10${N} : en mode UBOOT, il ouvre ${B}M-Flasher${N} (choisir le .fwsc, FLASH FIRMWARE) ;
+       si l'appareil tourne encore, il flashe en MIDI le firmware choisi au menu ${B}9${N}.
+
+  Le journal de cette session : ${C}$LOG${N}
+EOF
+  pause
+}
+
+# ------------------------------------------------ 2. câblage --------------------------------------------------------
+wiring() {
+  title "Câblage — $(pi_model)"
+  cat <<EOF | tee -a "$LOG"
+
+  ${B}Le câble :${N} un câble USB-A → USB-C (le côté USB-C va dans le SMK-37 ou le FM-1). Deux façons :
+   ${B}a)${N} sans couper : ouvre la gaine au milieu, dénude 5 mm sur le noir, le vert et le blanc, et soude-y
+      directement la résistance et le fil vers le Pi. ${Y}Isole chaque soudure (gaine, scotch) : rien ne doit se toucher.${N}
+   ${B}b)${N} en coupant : coupe au milieu, réunis les fils couleur avec couleur (soudure ou Wago 3 entrées),
+      la 3e entrée sert au fil vers le Pi.
+  ${Y}Le bout USB-A reste dans un port USB du Pi : après la clé, c'est le Pi qui doit voir la puce en USB.${N}
+  (à l'écran : ${BL}bleu${N} = le fil blanc du câble, pour le distinguer)
+
+     bout USB-A (port USB du Pi)                bout USB-C (appareil)
+       ${R}rouge 5V ════════════════════════════════════ rouge${N}      ← ${R}${B}JAMAIS vers le GPIO${N}
+       ${W}noir GND ═════════════════╦══════════════════ noir${N}
+                                 ${W}║${N}
+                                 ${W}╚══════════════════════════════→ broche 9  (GND)${N}
+       ${G}vert D+  ═════════════════╦══════════════════ vert${N}
+                                 ${G}║${N}
+                                 ${G}╚═══[ 100 Ω ]══════════════════→ broche 11 (GPIO${GPIO_DP})  ★ D+${N}
+       ${BL}blanc D- ═════════════════╦══════════════════ blanc${N}
+                                 ${BL}║${N}
+                                 ${BL}╚═══[ 100 Ω ]══════════════════→ broche 13 (GPIO${GPIO_DM})  ★ D-${N}
+
+  ${B}Raspberry Pi 5 (et Pi 4) — connecteur 40 broches, VUE DE DESSUS${N}
+  carte posée, connecteur en haut à gauche, connecteur du ventilateur à sa droite, la puce en dessous :
+
+    ┌─────────────────────────────────────────────────────────────── bord du HAUT de la carte
+    │    2    4    6    8   10   12   14   16   18   20  …  40
+    │   [5V] [5V] [GND][TX] [RX] [G18][GND][G23][G24][GND] …        [ventilateur]
+    │   [3V3][G2] [G3] [G4] [${W}GND${N}][${G}G17${N}][${BL}G27${N}][G22][3V3][G10] …
+    │    1    3    5    7    9   11   13   15   17   19  …  39
+    │                        ${W}▲${N}    ${G}▲${N}    ${BL}▲${N}
+    │                       ${W}noir${N} ${G}D+ ★${N} ${BL}D- ★${N}
+    │                       ${W}GND${N}  ${G}vert${N} ${BL}blanc${N}
+    │                    (rangée intérieure, côté puce)
+    bord GAUCHE de la carte
+
+    En partant de la gauche, sur la rangée du BAS (côté puce) : 5e trou = ${W}noir${N}, 6e = ${G}vert D+${N}, 7e = ${BL}blanc D-${N}.
+
+  ${B}Pi 4${N} : même connecteur, même câblage (puce « gpiochip0 »). ${B}Pi 5${N} : puce RP1, le script la trouve seul.
+
+  ${B}Vérifier au multimètre (mode bip), câble débranché :${N}
+     fiche USB-A face à toi, languette plastique en bas, contacts en haut, de gauche à droite :
+        [1] 5 V rouge   [2] D- blanc   [3] D+ vert   [4] GND noir    (1 et 4 sont plus longs)
+     (avant de couper) contact 3 ↔ fil vert, contact 2 ↔ fil blanc, contact 4 ↔ fil noir : ça bipe.
+     Et AUCUN fil ne doit biper avec un autre (pas de court-circuit).
+EOF
+  pause
+}
+
+# ------------------------------------------------ M-FLASHER ---------------------------------------------------------
+install_mflasher() {
+  title "Installation de M-Flasher ${MFLASHER_VERSION}"
+
+  local arch deb url
+  arch="$(dpkg --print-architecture)"           # arm64 (Raspberry Pi) ou amd64 (PC)
+  deb="$WORK/m-flasher_${MFLASHER_VERSION}-1_${arch}.deb"
+  url="https://github.com/jvitkauskas/m-flasher/releases/download/v${MFLASHER_VERSION}/m-flasher_${MFLASHER_VERSION}-1_${arch}.deb"
+
+  say "Téléchargement de M-Flasher ${MFLASHER_VERSION}..."
+
+  if ! curl -fL "$url" -o "$deb"; then
+    err "Téléchargement impossible."
+    pause
+    return 1
+  fi
+
+  say "Installation du paquet Debian..."
+
+  if ! run sudo apt-get install -y "$deb"; then
+    err "Installation de M-Flasher échouée."
+    pause
+    return 1
+  fi
+
+  if command -v m-flasher >/dev/null 2>&1; then
+    ok "M-Flasher installé : $(command -v m-flasher)"
+  else
+    err "Installation terminée, mais commande m-flasher introuvable."
+  fi
+
+  pause
+}
+
+# ------------------------------------------------ 3. installation ---------------------------------------------------
+install_all() {
+  title "Installation des outils"
+  run sudo apt-get update
+  run sudo apt-get install -y git python3 python3-pip python3-venv python3-dev build-essential \
+      usbutils libusb-1.0-0 libasound2-dev curl unzip python3-lgpio sg3-utils pkg-config cmake libjack-jackd2-dev \
+    || warn "Une partie des paquets n'a pas pu s'installer (voir ci-dessus)."
+  install_mflasher
+  if [ ! -d "$VENV" ]; then run python3 -m venv --system-site-packages "$VENV"; fi
+  run "$VENV/bin/pip" install --upgrade pip
+  run "$VENV/bin/pip" install mido python-rtmidi pyusb pyserial
+  "$VENV/bin/python" -c "import lgpio" 2>/dev/null || run "$VENV/bin/pip" install lgpio \
+    || warn "lgpio introuvable : sudo apt install python3-lgpio"
+  if [ -d "$WORK/jl-uboot-tool/.git" ]; then run git -C "$WORK/jl-uboot-tool" pull
+  else run git clone "$JLTOOL_GIT" "$WORK/jl-uboot-tool"; fi
+  if [ -f "$WORK/jl-uboot-tool/requirements.txt" ]; then
+    run "$VENV/bin/pip" install -r "$WORK/jl-uboot-tool/requirements.txt"
+  fi
+  run curl -fsSL "${INSTALLER_URL%/*}/fm1ports.py" -o "$WORK/fm1ports.py"          # (fm1_install.py needs it)
+  run curl -fsSL "$INSTALLER_URL" -o "$WORK/fm1_install.py" || warn "fm1_install.py non téléchargé."
+  write_key_script
+  ok "Installation terminée. Journal : $LOG"
+  pause
+}
+
+# ------------------------------------------------ la clé USB_KEY (Python, écrite par le script) ---------------------
+write_key_script() {
+  cat >"$WORK/cle_usb.py" <<'PY'
+# Envoie la clé JieLi USB_KEY 0x16EF : D+ = horloge (lue au front montant), D- = données, bit de poids fort d'abord.
+import lgpio, sys, time
+DP, DM, SECONDS, HALF_US = int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4])
+KEY = 0x16EF
+
+def find_chip():                       # Pi 5 : la RP1 ; Pi 4 : la bcm2711 ; sinon gpiochip0
+    best = None
+    for n in range(0, 8):
+        try:
+            h = lgpio.gpiochip_open(n)
+        except Exception:
+            continue
+        info = lgpio.gpio_get_chip_info(h)
+        lgpio.gpiochip_close(h)
+        label = str(info[2]).lower()
+        if "rp1" in label or "bcm2711" in label or "bcm2835" in label:
+            return n, label
+        if best is None:
+            best = (n, label)
+    return best or (0, "?")
+
+chip, label = find_chip()
+print(f"puce GPIO : gpiochip{chip} ({label})   D+ = GPIO{DP}   D- = GPIO{DM}   {SECONDS:.0f} s   demi-période {HALF_US} µs")
+h = lgpio.gpiochip_open(chip)
+lgpio.gpio_claim_output(h, DP, 1)
+lgpio.gpio_claim_output(h, DM, 1)
+
+def wait(us):
+    end = time.perf_counter_ns() + us * 1000
+    while time.perf_counter_ns() < end:
+        pass
+
+print(">>> METS L'INTERRUPTEUR DE L'APPAREIL SUR ON MAINTENANT <<<", flush=True)
+t0, packets = time.time(), 0
+try:
+    while time.time() - t0 < SECONDS:
+        for i in range(15, -1, -1):
+            lgpio.gpio_write(h, DM, (KEY >> i) & 1)
+            lgpio.gpio_write(h, DP, 0); wait(HALF_US)
+            lgpio.gpio_write(h, DP, 1); wait(HALF_US)
+        packets += 1
+        wait(4 * HALF_US)
+finally:
+    lgpio.gpio_claim_input(h, DP)      # lignes relâchées : la puce prend l'USB
+    lgpio.gpio_claim_input(h, DM)
+    lgpio.gpiochip_close(h)
+print(f"{packets} clés envoyées. Lignes relâchées.")
+PY
+}
+
+send_key() {
+  if [ "$KEY_SOURCE" = "pico" ]; then          # la clé vient d'un Raspberry Pi Pico : ici, on ne fait que regarder
+    title "Clé USB_KEY envoyée par le Pico (RP2040)"
+    say "Le Pico (rp2040/usb_key.py) : GP6 = D+ (vert), GP7 = D- (blanc), GND = noir. Le bout USB-A dans CET ordinateur."
+    say "1. Interrupteur de l'appareil sur ${B}OFF${N}.   2. Lance usb_key.py sur le Pico (Thonny : Run)."
+    say "3. Pendant ses 6 s, interrupteur sur ${B}ON${N}.   4. Reviens ici et appuie sur Entrée."
+    read -rp "  Entrée quand c'est fait… " _
+    check_usb noPause
+    pause; return
+  fi
+  title "Envoi de la clé USB_KEY"
+  [ -f "$WORK/cle_usb.py" ] || write_key_script
+  say "${B}Avant :${N} l'${B}interrupteur de l'appareil sur OFF${N}, le câble USB dans le Pi, les 3 fils GPIO en place."
+  say "${B}Ensuite :${N} tu appuies sur Entrée, le Pi envoie la clé pendant ${KEY_SECONDS} s, et ${B}PENDANT ce temps${N}"
+  say "          tu mets l'${B}interrupteur du clavier sur ON${N} (idéalement 1 seconde après Entrée)."
+  say "          La puce lit la clé au moment où elle s'allume : allumée avant, ou après les ${KEY_SECONDS} s, ça ne marche pas."
+  read -rp "  Interrupteur sur OFF ? Entrée pour lancer, puis interrupteur sur ON… " _
+  sudo dmesg -C 2>/dev/null
+  run sudo "$VENV/bin/python" "$WORK/cle_usb.py" "$GPIO_DP" "$GPIO_DM" "$KEY_SECONDS" "$KEY_HALF_US" \
+    || err "Le script de clé a échoué (lgpio installé ? menu 3)."
+  sleep 2
+  check_usb noPause
+  pause
+}
+
+# ------------------------------------------------ 5. détection ------------------------------------------------------
+check_usb() {
+  [ "$1" = "noPause" ] || title "Le clavier est-il vu ?"
+  say "${B}lsusb :${N}"; run lsusb
+  say "${B}dmesg (dernières lignes USB) :${N}"; sudo dmesg | grep -iE "usb|4c4a|jieli|uboot|scsi|sd[a-z]" | tail -n 25 | tee -a "$LOG"
+  if lsusb | grep -qi "4c4a"; then
+    ok "Appareil JieLi 4c4a trouvé : la puce est en mode UBOOT. Étape suivante : menu 6 (sauvegarde)."
+    lsblk -o NAME,SIZE,VENDOR,MODEL,TRAN | tee -a "$LOG"
+    warn "Ne monte et ne formate PAS le disque qu'Ubuntu pourrait proposer."
+  elif lsusb | grep -qiE "smk|midi|sinco"; then
+    ok "Un appareil MIDI est vu : le clavier démarre peut-être. Menu 10 pour reflasher."
+  else
+    warn "Pas d'appareil 4c4a. Recommence le menu 4 (allume plus tôt ou plus tard), ou menu 8 (réglages)."
+  fi
+  [ "$1" = "noPause" ] || pause
+}
+
+# ------------------------------------------------ 6. sauvegarde -----------------------------------------------------
+dump_flash() {
+  title "Sauvegarde de toute la flash (dump)"
+  [ -d "$WORK/jl-uboot-tool" ] || { err "jl-uboot-tool absent : menu 3 d'abord."; pause; return; }
+  lsusb | grep -qi 4c4a || warn "Pas d'appareil 4c4a vu : la sauvegarde va sûrement échouer (menu 4)."
+  local out="$DUMPDIR/flash-$(date +%Y%m%d-%H%M%S).bin"
+  say "Taille demandée : ${B}$DUMP_SIZE${N} (modifiable : DUMP_SIZE=0x400000 ./rescue-fr.sh)"
+  say "1) automatique : le script envoie « read 0 $DUMP_SIZE … » puis « exit » à l'outil"
+  say "2) à la main    : tu tapes toi-même dans l'outil (affiche d'abord la taille de la flash)"
+  read -rp "  Choix [1/2] : " c
+  cd "$WORK/jl-uboot-tool" || return
+  if [ "$c" = "2" ]; then
+    say "Dans l'outil, tape :   ${B}read 0 $DUMP_SIZE $out${N}   puis   ${B}exit${N}"
+    sudo "$VENV/bin/python" jluboottool.py 2>&1 | tee -a "$LOG"
+  else
+    printf 'read 0 %s %s\nexit\n' "$DUMP_SIZE" "$out" | sudo "$VENV/bin/python" jluboottool.py 2>&1 | tee -a "$LOG"
+  fi
+  cd "$HERE" || return
+  if [ -s "$out" ]; then
+    sudo chown "$(id -u):$(id -g)" "$out" 2>/dev/null
+    ok "Sauvegarde : $out ($(stat -c %s "$out") octets)"
+    sha256sum "$out" | tee -a "$LOG" | tee "$out.sha256" >/dev/null
+    cp "$out" "$out.copie" && ok "Une copie de sécurité : $out.copie (mets-en une aussi sur une clé USB)"
+  else
+    err "Pas de fichier de sauvegarde. Regarde le message de l'outil ci-dessus (menu 7 pour le journal)."
+    warn "Si l'outil ne reconnaît pas la puce (AC791N), garde le journal et n'essaie rien d'autre."
+  fi
+  pause
+}
+
+# ------------------------------------------------ 7. journal --------------------------------------------------------
+journal() {
+  title "Journal et diagnostic"
+  local f="$LOGDIR/diagnostic-$(date +%Y%m%d-%H%M%S).txt"
+  {
+    echo "=== $(date)   $(pi_model)   $(uname -a)"
+    echo "=== lsusb";  lsusb
+    echo "=== lsusb -t"; lsusb -t
+    echo "=== lsblk"; lsblk -o NAME,SIZE,VENDOR,MODEL,TRAN
+    echo "=== dmesg (150 dernières lignes)"; sudo dmesg | tail -n 150
+    echo "=== aconnect -l (MIDI)"; aconnect -l 2>&1
+    echo "=== journal de la session ($LOG)"; cat "$LOG"
+  } >"$f" 2>&1
+  less -R "$f"
+  ok "Diagnostic enregistré : $f   (le fichier à joindre pour demander de l'aide)"
+  pause
+}
+
+# ------------------------------------------------ 8. réglages de la clé ---------------------------------------------
+settings() {
+  title "Réglages de l'envoi de la clé"
+  say "Actuel : D+ = GPIO$GPIO_DP   D- = GPIO$GPIO_DM   durée ${KEY_SECONDS} s   demi-période ${KEY_HALF_US} µs"
+  say "  1) inverser D+ et D-        2) plus lent (25 µs)        3) plus rapide (5 µs)"
+  say "  4) durée 10 s               5) revenir aux valeurs de départ"
+  say "  6) la clé vient de ce Raspberry Pi (GPIO) / d'un Pico (RP2040) : maintenant ${KEY_SOURCE}"
+  read -rp "  Choix : " c
+  case "$c" in
+    1) t=$GPIO_DP; GPIO_DP=$GPIO_DM; GPIO_DM=$t ;;
+    2) KEY_HALF_US=25 ;;
+    3) KEY_HALF_US=5 ;;
+    4) KEY_SECONDS=10 ;;
+    5) GPIO_DP=17; GPIO_DM=27; KEY_SECONDS=6; KEY_HALF_US=10 ;;
+    6) [ "$KEY_SOURCE" = "pico" ] && KEY_SOURCE=gpio || KEY_SOURCE=pico ;;
+  esac
+  ok "Maintenant : D+ = GPIO$GPIO_DP   D- = GPIO$GPIO_DM   ${KEY_SECONDS} s   ${KEY_HALF_US} µs"
+  pause
+}
+
+# ------------------------------------------------ 9. reflash OpenVALive -----------------------------------------------
+find_firmware() {
+  if [ -n "$FIRMWARE" ] && [ -f "$FIRMWARE" ]; then echo "$FIRMWARE"; return; fi
+  local n; n=$(ls "$HERE"/*.fwsc 2>/dev/null | wc -l)
+  [ "$n" = "1" ] && ls "$HERE"/*.fwsc
+}
+
+# ------------------------------------------------ 9. reflasher ------------------------------------------------------
+reflash() {
+  title "Reflasher le firmware"
+  if lsusb | grep -qi "4c4a:"; then             # mode UBOOT : M-Flasher (protocole USB/SCSI JieLi)
+    ok "Appareil en mode UBOOT ($(lsusb | grep -i 4c4a: | head -n 1 | cut -d' ' -f6-))"
+    say "En mode UBOOT, le flash passe par ${B}M-Flasher${N} (interface graphique) :"
+    say "  1. il fait d'abord une sauvegarde automatique (AUTO BACKUP SAVED) ;"
+    say "  2. FIRMWARE FILE > CHOOSE FILE : prends ${B}$(find_firmware || echo "le .fwsc choisi au menu 9")${N} ;"
+    say "  3. FLASH FIRMWARE, puis REVIEW & FLASH. Le chargeur de démarrage (bootloader) n'est pas touché ;"
+    say "  4. la calibration (C1) et les appairages (7B) restent tels quels."
+    command -v m-flasher >/dev/null 2>&1 || install_mflasher || return
+    read -rp "  Ouvrir M-Flasher ? [o/N] " c
+    [[ "$c" == "o" || "$c" == "O" ]] || { warn "Annulé."; pause; return; }
+    sudo modprobe sg 2>/dev/null                  # (le pilote SCSI générique qu'il utilise)
+    run m-flasher
+    pause; return
+  fi
+  # l'appareil tourne : le flash passe par le MIDI (fm1_install.py)
+  [ -f "$WORK/fm1ports.py" ] || curl -fsSL "${INSTALLER_URL%/*}/fm1ports.py" -o "$WORK/fm1ports.py" 2>>"$LOG"
+  [ -f "$WORK/fm1_install.py" ] || curl -fsSL "$INSTALLER_URL" -o "$WORK/fm1_install.py" 2>>"$LOG"
+  local fw; fw="$(find_firmware)"
+  [ -n "$fw" ] || { err "Aucun firmware .fwsc : menu 9 pour le choisir."; pause; return; }
+  say "Firmware : ${B}$fw${N}"
+  run "$VENV/bin/python" "$WORK/fm1_install.py" --port midi --info \
+    || { err "Ni en mode UBOOT, ni en MIDI : menu 4 (clé), puis reviens ici."; pause; return; }
+  read -rp "  L'appareil est vu ci-dessus. Lancer le flash ? [o/N] " c
+  [[ "$c" == "o" || "$c" == "O" ]] || { warn "Annulé."; pause; return; }
+  run "$VENV/bin/python" "$WORK/fm1_install.py" --port midi --force --no-resources "$fw" \
+    && ok "Flash terminé : l'appareil redémarre." || err "Le flash a échoué : menu 7 pour le journal."
+  pause
+}
+
+# ------------------------------------------------ 10. choisir le firmware -------------------------------------------
+choose_fw() {
+  title "Choisir le firmware à flasher"
+  local n; n=$(ls "$HERE"/*.fwsc 2>/dev/null | wc -l)
+  say "  ${B}1${N}  Le .fwsc posé à côté du script (il en faut UN seul ; trouvés : $n)"
+  say "  ${B}2${N}  Un .fwsc personnalisé : un chemin sur ce Pi, ou une adresse https://…"
+  say "  ${B}3${N}  Le firmware OpenVALive officiel : SMK-37 Elite / SMK-37 Pro / FM-1"
+  read -rp "  Choix [1/2/3] : " c
+  case "$c" in
+    1) if [ "$n" = "1" ]; then FIRMWARE="$(ls "$HERE"/*.fwsc)"; ok "Choisi : $FIRMWARE"
+       else err "Il faut exactement un .fwsc dans $HERE (il y en a $n)."; fi ;;
+    2) read -rp "  Chemin ou adresse : " src
+       if [ -f "$src" ]; then FIRMWARE="$src"; ok "Choisi : $FIRMWARE"
+       elif [[ "$src" == http* ]]; then
+         local out="$WORK/$(basename "${src%%\?*}")"
+         run curl -fL "$src" -o "$out" && { FIRMWARE="$out"; ok "Téléchargé et choisi : $out"; } || err "Téléchargement impossible."
+       else err "Ni un fichier, ni une adresse : $src"; fi ;;
+    3) read -rp "  1) SMK-37 Elite   2) SMK-37 Pro   3) FM-1 : " m
+       local url="$FW_SMK_ELITE"; [ "$m" = "2" ] && url="$FW_SMK_PRO"; [ "$m" = "3" ] && url="$FW_FM1"
+       local out="$WORK/$(basename "$url")"
+       run curl -fL "$url" -o "$out" && { FIRMWARE="$out"; ok "Téléchargé et choisi : $out"; } \
+         || err "Téléchargement impossible (Internet ?)." ;;
+  esac
+  case "$FIRMWARE" in *pro*) warn "Paquet PRO : un clavier ELITE le refusera (et inversement).";; esac
+  pause
+}
+
+# ------------------------------------------------ menu --------------------------------------------------------------
+while true; do
+  title "menu   ($(pi_model))"
+  cat <<EOF
+  ${B}1${N}  Les étapes, dans l'ordre (commence ici)
+  ${B}2${N}  Câblage Pi 4 / Pi 5 et couleurs des fils, test au multimètre
+  ${B}3${N}  Installer les outils (Python, GPIO, jl-uboot-tool, M-Flasher, flasheur MIDI)
+  ${B}4${N}  Envoyer la clé USB_KEY puis allumer l'appareil (mode UBOOT)
+  ${B}5${N}  Le clavier est-il vu ? (lsusb / dmesg)
+  ${B}6${N}  SAUVEGARDER toute la flash (dump)  — avant toute écriture
+  ${B}7${N}  Journal : afficher et enregistrer le diagnostic
+  ${B}8${N}  Réglages de la clé (inverser D+/D-, plus lent, plus long)
+  ${B}9${N}  Choisir le firmware : à côté du script / personnalisé / officiel OpenVALive
+  ${B}10${N} Reflasher : M-Flasher en mode UBOOT, ou en MIDI si l'appareil tourne
+  ${B}0${N}  Quitter
+
+  Journal de cette session : ${C}$LOG${N}
+EOF
+  read -rp "  Ton choix : " choice
+  echo "[menu] $choice" >>"$LOG"
+  case "$choice" in
+    1) steps ;; 2) wiring ;; 3) install_all ;; 4) send_key ;; 5) check_usb ;;
+    6) dump_flash ;; 7) journal ;; 8) settings ;; 9) choose_fw ;; 10) reflash ;; 0) say "Au revoir."; exit 0 ;;
+    *) ;;
+  esac
+done
