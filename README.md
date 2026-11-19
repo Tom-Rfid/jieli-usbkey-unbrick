@@ -3,7 +3,7 @@
 **Bring back a JieLi-based device that no longer boots — without opening it.**
 First made for the M-VAVE **SMK-37** and **FM-1**.
 
-> 🇫🇷 [Lire en français](README.fr.md)
+> 🇫🇷 [Lire en français](README.fr.md) · 🌐 **The illustrated page: <https://tom-rfid.github.io/jieli-usbkey-unbrick/>**
 
 A firmware that crashes at start-up leaves the device invisible over USB: no MIDI port, the maker's tools cannot see
 it, buttons at power-on do nothing. Inside, the JieLi chip still holds a **factory USB loader** in its ROM ("UBOOT").

@@ -3,7 +3,7 @@
 **Ramener à la vie un appareil à puce JieLi qui ne démarre plus — sans l'ouvrir.**
 Fait d'abord pour les M-VAVE **SMK-37** et **FM-1**.
 
-> 🇬🇧 [Read in English](README.md)
+> 🇬🇧 [Read in English](README.md) · 🌐 **La page illustrée : <https://tom-rfid.github.io/jieli-usbkey-unbrick/#fr>**
 
 Un firmware qui plante au démarrage rend l'appareil invisible en USB : plus de port MIDI, les outils du fabricant ne le
 voient pas, les boutons au démarrage ne font rien. À l'intérieur, la puce JieLi garde dans sa ROM un **chargeur USB
