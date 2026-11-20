@@ -27,6 +27,7 @@ FW_FM1="${FW_FM1:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/download/
 INSTALLER_URL="${INSTALLER_URL:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/latest/download/fm1_install.py}"
 JLTOOL_GIT="${JLTOOL_GIT:-https://github.com/kagaimiq/jl-uboot-tool.git}"
 MFLASHER_VERSION="${MFLASHER_VERSION:-0.12.1}"
+RESCUE_VERSION="2026-11-20 c"                   # (shown in every title: which script is running)
 DUMP_SIZE="${DUMP_SIZE:-0x100000}"                    # taille de la flash à sauvegarder (1 Mo sur le SMK-37 Elite)
 KEY_SECONDS="${KEY_SECONDS:-6}"                       # durée d'envoi de la clé
 KEY_HALF_US="${KEY_HALF_US:-10}"                      # demi-période de l'horloge en µs (10 ≈ 50 kHz ; 25 plus lent)
@@ -49,7 +50,7 @@ err()  { say "${R}✖ $*${N}"; }
 pause(){ echo; read -rp "  Entrée pour revenir au menu… " _; }
 run()  { say "${C}\$ $*${N}"; "$@" 2>&1 | tee -a "$LOG"; return "${PIPESTATUS[0]}"; }
 title(){ clear; say "${B}${M}══════════════════════════════════════════════════════════════${N}";
-         say "${B}  SMK-37 / FM-1 — sauvetage   ·   $*${N}";
+         say "${B}  SMK-37 / FM-1 — sauvetage   ·   $*   ${N}${C}(script $RESCUE_VERSION)${N}";
          say "${B}${M}══════════════════════════════════════════════════════════════${N}"; }
 
 pi_model() { tr -d '\0' </proc/device-tree/model 2>/dev/null || echo "inconnu"; }

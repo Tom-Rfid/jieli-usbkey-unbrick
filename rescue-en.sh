@@ -24,7 +24,8 @@ FIRMWARE="${FIRMWARE:-}"                              # a given .fwsc (otherwise
 FW_SMK_ELITE="${FW_SMK_ELITE:-https://github.com/Tom-Rfid/OpenVALive_SMK-37/releases/download/preview-dev/openvalive-smk37-elite-0.0.3.fwsc}"
 FW_SMK_PRO="${FW_SMK_PRO:-https://github.com/Tom-Rfid/OpenVALive_SMK-37/releases/download/preview-dev/openvalive-smk37-pro-0.0.3.fwsc}"
 FW_FM1="${FW_FM1:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/download/preview-dev/openvalive-fm1-0.0.3.fwsc}"
-MFLASHER_VERSION="${MFLASHER_VERSION:-0.12.1}"        # https://github.com/jvitkauskas/m-flasher
+MFLASHER_VERSION="${MFLASHER_VERSION:-0.12.1}"
+RESCUE_VERSION="2026-11-20 c"                   # (shown in every title: which script is running)        # https://github.com/jvitkauskas/m-flasher
 INSTALLER_URL="${INSTALLER_URL:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/latest/download/fm1_install.py}"
 JLTOOL_GIT="${JLTOOL_GIT:-https://github.com/kagaimiq/jl-uboot-tool.git}"
 DUMP_SIZE="${DUMP_SIZE:-0x100000}"                    # flash size to back up (1 MB on the SMK-37 Elite)
@@ -49,7 +50,7 @@ err()  { say "${R}✖ $*${N}"; }
 pause(){ echo; read -rp "  Enter to go back to the menu… " _; }
 run()  { say "${C}\$ $*${N}"; "$@" 2>&1 | tee -a "$LOG"; return "${PIPESTATUS[0]}"; }
 title(){ clear; say "${B}${M}══════════════════════════════════════════════════════════════${N}";
-         say "${B}  SMK-37 / FM-1 — rescue   ·   $*${N}";
+         say "${B}  SMK-37 / FM-1 — rescue   ·   $*   ${N}${C}(script $RESCUE_VERSION)${N}";
          say "${B}${M}══════════════════════════════════════════════════════════════${N}"; }
 
 pi_model() { tr -d '\0' </proc/device-tree/model 2>/dev/null || echo "unknown"; }
