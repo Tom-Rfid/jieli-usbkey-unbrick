@@ -13,7 +13,8 @@ réécrit le firmware avec [M-Flasher](https://github.com/jvitkauskas/m-flasher)
 | | |
 |---|---|
 | ✅ **Testé** | M-VAVE SMK-37 Elite, Raspberry Pi 5 — clé, sauvegarde de 1 Mo, firmware écrit, appareil revenu (novembre 2026) |
-| 🔶 **Devrait marcher, pas encore testé** | M-VAVE FM-1 (même famille JieLi, géré par M-Flasher), SMK-37 Pro, Raspberry Pi 4 |
+| ✅ **Testé** | M-VAVE FM-1 (dernière carte, sans logo sous l'écran), Raspberry Pi 5 — clé, sauvegarde de 1 Mo (novembre 2026) |
+| 🔶 **Devrait marcher, pas encore testé** | SMK-37 Pro, Raspberry Pi 4 |
 | 🧪 **Préparé, pas testé** | la clé depuis un Raspberry Pi Pico (RP2040) : [`rp2040/`](rp2040/README.md) |
 
 ## Le principe
@@ -103,6 +104,20 @@ rien ; la sauvegarde (menu 6) ne marche qu'en mode UBOOT (`4c4a`). Le FM-1 et le
 
 Rien de vu à l'étape 5 ? Allume un peu plus tôt ou plus tard, puis essaie le menu 8 (horloge plus lente, ou D+ et D−
 inversés).
+
+## À quoi ça ressemble
+
+Le chargeur est vu (menu 4 puis 5) : `WL80UBOOT1.00`, en disque amovible `WL82 UBOOT1.00`.
+
+<img src="img/uboot-dmesg.png" width="600" alt="dmesg : WL80UBOOT1.00, stockage USB WL82 UBOOT1.00, appareil JieLi 4c4a trouvé">
+
+Il apparaît comme un disque vide (0 o) : ne le monte et ne le formate jamais.
+
+<img src="img/uboot-lsblk.png" width="600" alt="lsblk : sda 0B WL82 UBOOT1.00 usb">
+
+La sauvegarde (menu 6) : la puce WL82 (série AC791N), sa flash SPI NOR lue en entier, 1 Mo en deux secondes.
+
+<img src="img/uboot-dump.png" width="600" alt="jl-uboot-tool : WL82 AC791N, loader installé, lecture 100 % 1.00M">
 
 ## Bon à savoir
 

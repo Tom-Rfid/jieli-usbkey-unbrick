@@ -13,7 +13,8 @@ the firmware with [M-Flasher](https://github.com/jvitkauskas/m-flasher).
 | | |
 |---|---|
 | ✅ **Tested** | M-VAVE SMK-37 Elite, Raspberry Pi 5 — key, 1 MB backup, firmware written, device back (November 2026) |
-| 🔶 **Should work, not tested yet** | M-VAVE FM-1 (same JieLi family, supported by M-Flasher), SMK-37 Pro, Raspberry Pi 4 |
+| ✅ **Tested** | M-VAVE FM-1 (latest board, no logo under the screen), Raspberry Pi 5 — key, 1 MB backup (November 2026) |
+| 🔶 **Should work, not tested yet** | SMK-37 Pro, Raspberry Pi 4 |
 | 🧪 **Prepared, not tested** | the key from a Raspberry Pi Pico (RP2040): [`rp2040/`](rp2040/README.md) |
 
 ## How it works
@@ -99,6 +100,20 @@ as MIDI (the script recognises it and says so: `3654:7756` SMK37 Open, `1209:000
 nothing; the backup (menu 6) only works in UBOOT mode (`4c4a`). The FM-1 and the SMK-37 share the same loader, `4c4a:8057`.
 
 Nothing seen at step 5? Switch on a bit earlier or later, then try menu 8 (slower clock, or D+ and D− swapped).
+
+## What it looks like
+
+The loader is seen (menu 4, then 5): `WL80UBOOT1.00`, as a removable disk `WL82 UBOOT1.00`.
+
+<img src="img/uboot-dmesg.png" width="600" alt="dmesg: WL80UBOOT1.00, USB mass storage WL82 UBOOT1.00, JieLi 4c4a device found">
+
+It shows as an empty disk (0 B): never mount or format it.
+
+<img src="img/uboot-lsblk.png" width="600" alt="lsblk: sda 0B WL82 UBOOT1.00 usb">
+
+The backup (menu 6): the WL82 chip (AC791N series), its SPI NOR flash read whole, 1 MB in two seconds.
+
+<img src="img/uboot-dump.png" width="600" alt="jl-uboot-tool: WL82 AC791N, loader installed, reading 100 % 1.00M">
 
 ## Good to know
 
