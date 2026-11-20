@@ -220,7 +220,11 @@ cd jieli-usbkey-unbrick
         <figcaption>The backup: the tool finds the chip (WL82, AC791N series), installs its loader and reads the 1 MB of
         flash in about two seconds.</figcaption></figure></li>
     <li><b>Write a firmware</b> with <a href="https://github.com/jvitkauskas/m-flasher">M-Flasher</a>: the maker's, or one
-      of the two below. The bootloader, the key calibration and the Bluetooth pairings are left alone.</li>
+      of the two below. The bootloader, the key calibration and the Bluetooth pairings are left alone. The script's menu 10
+      hands it the firmware you chose (<code>m-flasher firmware file.fwsc --board smk37 --restart</code>, type
+      <code>yes</code>), or opens its window.
+      <figure class="shot"><img src="img/m-flasher.png" alt="M-Flasher's window: SMK-37 Pro / Elite, 1 MiB flash, BACKUP, RESTORE, FLASH FIRMWARE; beside it the script's menu 10" loading="lazy">
+        <figcaption>M-Flasher sees the unit in its loader; it backs up the flash by itself before every write.</figcaption></figure></li>
   </ol>
   <p class="callout col">The hard part is getting the chip to answer again. Once it shows up as a USB loader, writing a firmware is
   the ordinary job flashers already do well; this project is about the first part.</p>
@@ -338,7 +342,11 @@ cd jieli-usbkey-unbrick
         <figcaption>La sauvegarde : l'outil trouve la puce (WL82, série AC791N), installe son chargeur et lit le
         mégaoctet de flash en deux secondes environ.</figcaption></figure></li>
     <li><b>Écrire un firmware</b> avec <a href="https://github.com/jvitkauskas/m-flasher">M-Flasher</a> : celui du
-      fabricant, ou l'un des deux plus bas. Le bootloader, la calibration et les appairages Bluetooth ne sont pas touchés.</li>
+      fabricant, ou l'un des deux plus bas. Le bootloader, la calibration et les appairages Bluetooth ne sont pas touchés.
+      Le menu 10 du script lui passe le firmware choisi (<code>m-flasher firmware fichier.fwsc --board smk37 --restart</code>,
+      tape <code>yes</code>), ou ouvre sa fenêtre.
+      <figure class="shot"><img src="img/m-flasher.png" alt="La fenêtre de M-Flasher : SMK-37 Pro / Elite, flash 1 Mio, BACKUP, RESTORE, FLASH FIRMWARE ; à côté, le menu 10 du script" loading="lazy">
+        <figcaption>M-Flasher voit l'appareil dans son chargeur ; il sauvegarde la flash tout seul avant chaque écriture.</figcaption></figure></li>
   </ol>
   <p class="callout col">Le plus dur, c'est de faire répondre la puce. Une fois qu'elle apparaît en chargeur USB, écrire
   un firmware est le travail ordinaire que les outils de flash font déjà bien ; ce projet s'occupe de la première partie.</p>
