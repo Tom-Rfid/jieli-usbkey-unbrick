@@ -3,6 +3,9 @@
 **Bring back a JieLi-based device that no longer boots — without opening it.**
 First made for the M-VAVE **SMK-37** and **FM-1**.
 
+**Release 1.0.0** (20 November 2026): the whole rescue, tested and validated on the SMK-37 Elite and the FM-1.
+[Download](https://github.com/Tom-Rfid/jieli-usbkey-unbrick/releases/latest)
+
 > 🇫🇷 [Lire en français](README.fr.md) · 🌐 **The illustrated page: <https://tom-rfid.github.io/jieli-usbkey-unbrick/>**
 
 A firmware that crashes at start-up leaves the device invisible over USB: no MIDI port, the maker's tools cannot see
@@ -12,8 +15,8 @@ the firmware with [M-Flasher](https://github.com/jvitkauskas/m-flasher).
 
 | | |
 |---|---|
-| ✅ **Tested** | M-VAVE SMK-37 Elite, Raspberry Pi 5 — key, 1 MB backup, firmware written, device back (November 2026) |
-| ✅ **Tested** | M-VAVE FM-1 (latest board, no logo under the screen), Raspberry Pi 5 — key, 1 MB backup (November 2026) |
+| ✅ **Tested, validated** | M-VAVE SMK-37 Elite, Raspberry Pi 5 — key, 1 MB backup, firmware written (command line and window), device back (November 2026) |
+| ✅ **Tested, validated** | M-VAVE FM-1 (latest board, no logo under the screen), Raspberry Pi 5 — key, 1 MB backup, firmware written (command line and window), device back (November 2026) |
 | 🔶 **Should work, not tested yet** | SMK-37 Pro, Raspberry Pi 4 |
 | 🧪 **Prepared, not tested** | the key from a Raspberry Pi Pico (RP2040): [`rp2040/`](rp2040/README.md) |
 
