@@ -61,15 +61,17 @@ steps() {
 
   ${B}1.${N} Menu ${B}3${N}: install the tools (once, needs Internet).
   ${B}2.${N} Menu ${B}2${N}: do the wiring (Pi OFF while you plug the GPIO wires).
-  ${B}3.${N} Menu ${B}4${N}: the unit's switch ${B}OFF${N}, Enter, then switch ${B}ON${N} during the ${KEY_SECONDS} s.
-  ${B}4.${N} Menu ${B}5${N}: check. We look for a ${B}4c4a${N} device (JieLi in UBOOT mode).
+  ${B}3.${N} Menu ${B}4${N}: the unit's switch ${B}OFF${N}, Enter, ${B}THEN${N} switch ${B}ON${N} during the ${KEY_SECONDS} s.
+       (Switched on before Enter, it boots normally as MIDI: the script says so, start again.)
+  ${B}4.${N} Menu ${B}5${N}: check. We look for a ${B}4c4a${N} device (JieLi in UBOOT mode). ${B}A dark screen is normal${N} there.
        Nothing? Repeat step 3 (switch on earlier / later), then try menu ${B}8${N} (slower, or D+/D- swapped).
   ${B}5.${N} Menu ${B}6${N}: ${B}BACK UP the whole flash${N} (dump). NOTHING is written before you have this file.
   ${B}6.${N} Keep the dump somewhere safe (USB stick) and the log (menu ${B}7${N}): that is what it takes to analyse
        and repair, without touching the keyboard's calibration or Bluetooth.
   ${B}7.${N} Menu ${B}9${N}: choose the firmware (while there is Internet, any time).
-  ${B}8.${N} Menu ${B}10${N}: in UBOOT mode it opens ${B}M-Flasher${N} (choose the .fwsc, FLASH FIRMWARE);
-       if the unit still runs, it flashes the firmware chosen in menu ${B}9${N} over MIDI.
+  ${B}8.${N} Menu ${B}10${N}: in UBOOT mode, ${B}1${N} flashes the chosen firmware straight with M-Flasher's command line
+       (you type ${B}yes${N}), ${B}2${N} opens its window; if the unit still runs, it flashes over MIDI.
+  ${B}9.${N} ${B}Switch the unit off, wait 2 s, switch it on${N}: the logo, then the help. (It stays dark otherwise.)
 
   This session's log: ${C}$LOG${N}
 EOF
@@ -273,6 +275,7 @@ check_usb() {
   case "$(usb_state)" in
     uboot)
       ok "JieLi 4c4a device found: the chip is in UBOOT mode. Next: menu 6 (backup)."
+      say "   ${B}The unit's screen stays dark in this mode: that is normal.${N} Nothing is broken; switching it off leaves it."
       lsblk -o NAME,SIZE,VENDOR,MODEL,TRAN | tee -a "$LOG"
       warn "Do NOT mount or format the disk the system may offer." ;;
     normal)
@@ -312,6 +315,7 @@ dump_flash() {
   if [ -s "$out" ]; then
     sudo chown "$(id -u):$(id -g)" "$out" 2>/dev/null
     ok "Backup: $out ($(stat -c %s "$out") bytes)"
+    say "The unit stays in UBOOT mode (dark screen): menu 9 then 10 to write a firmware, or switch it off to leave it."
     sha256sum "$out" | tee -a "$LOG" | tee "$out.sha256" >/dev/null
     cp "$out" "$out.copy" && ok "A safety copy: $out.copy (put one on a USB stick too)"
   else
@@ -382,13 +386,20 @@ reflash() {
     say "  ${B}1${N}  Flash ${B}here${N}, straight with this firmware (M-Flasher's command line) — recommended"
     say "  ${B}2${N}  Open M-Flasher's window (FIRMWARE FILE > CHOOSE FILE, FLASH FIRMWARE, REVIEW & FLASH)"
     read -rp "  Choice [1/2]: " c
-    if [ "$c" = "2" ]; then run m-flasher; pause; return; fi
+    if [ "$c" = "2" ]; then
+      run m-flasher
+      say "${B}After flashing: switch the unit off, wait 2 seconds, switch it on${N} (the screen stays dark otherwise)."
+      pause; return
+    fi
     [ -n "$fw" ] || { err "No firmware: menu 9."; pause; return; }
     local board=fm1; case "$fw" in *smk37*|*SMK37*|*smk-37*) board=smk37;; esac
     say "Type ${B}yes${N} when M-Flasher shows what it will write."
     run m-flasher firmware "$fw" --board "$board" --restart \
       || run sudo m-flasher firmware "$fw" --board "$board" --restart \
-      && ok "Firmware written: the unit restarts." || err "Flashing failed: menu 7 for the log."
+      && { ok "Firmware written."
+           say "${B}If the screen stays dark: switch the unit off, wait 2 seconds, switch it on.${N} (The SMK-37 does not always"
+           say "restart by itself after the loader: that is normal.) It should show the logo, then the help."; } \
+      || err "Flashing failed: menu 7 for the log."
     pause; return
   fi
   # the unit runs: flashing goes over MIDI (fm1_install.py)

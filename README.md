@@ -120,6 +120,9 @@ Flashing (menu 10): in UBOOT mode the script hands the chosen firmware to M-Flas
 
 <img src="img/m-flasher.png" width="600" alt="M-Flasher: SMK-37 Pro / Elite, 1 MiB flash, the script's menu 10 beside it">
 
+**After flashing, switch the unit off and on again**: in loader mode its screen stays dark, and the SMK-37 does not
+always restart by itself. Nothing is wrong.
+
 ## Good to know
 
 - **Keep your backup** (on a USB stick too). Never restore another unit's backup onto yours: the key calibration is

@@ -61,16 +61,18 @@ steps() {
 
   ${B}1.${N} Menu ${B}3${N} : installer les outils (une seule fois, il faut Internet).
   ${B}2.${N} Menu ${B}2${N} : faire le câblage (Pi ÉTEINT pendant que tu branches les fils GPIO).
-  ${B}3.${N} Menu ${B}4${N} : interrupteur de l'appareil sur ${B}OFF${N}, Entrée, puis interrupteur sur ${B}ON${N} pendant les ${KEY_SECONDS} s.
-  ${B}4.${N} Menu ${B}5${N} : vérifier. On cherche un appareil ${B}4c4a${N} (JieLi en mode UBOOT).
+  ${B}3.${N} Menu ${B}4${N} : interrupteur de l'appareil sur ${B}OFF${N}, Entrée, ${B}PUIS${N} interrupteur sur ${B}ON${N} pendant les ${KEY_SECONDS} s.
+       (Allumé avant Entrée, il démarre normalement en MIDI : le script le dit, recommence.)
+  ${B}4.${N} Menu ${B}5${N} : vérifier. On cherche un appareil ${B}4c4a${N} (JieLi en mode UBOOT). ${B}Écran noir : normal${N} dans ce mode.
        Rien ? Recommence l'étape 3 (allume plus tôt / plus tard), puis essaie le menu ${B}8${N} (plus lent,
        ou D+/D- inversés).
   ${B}5.${N} Menu ${B}6${N} : ${B}SAUVEGARDE de toute la flash${N} (dump). On n'écrit RIEN avant d'avoir ce fichier.
   ${B}6.${N} Garde le dump en lieu sûr (clé USB) et le journal (menu ${B}7${N}) : c'est ce qu'il faut pour analyser
        et réparer, sans toucher à la calibration du clavier ni au Bluetooth.
   ${B}7.${N} Menu ${B}9${N} : choisir le firmware (tant qu'il y a Internet, n'importe quand).
-  ${B}8.${N} Menu ${B}10${N} : en mode UBOOT, il ouvre ${B}M-Flasher${N} (choisir le .fwsc, FLASH FIRMWARE) ;
-       si l'appareil tourne encore, il flashe en MIDI le firmware choisi au menu ${B}9${N}.
+  ${B}8.${N} Menu ${B}10${N} : en mode UBOOT, ${B}1${N} flashe directement le firmware choisi avec M-Flasher en ligne de commande
+       (tu tapes ${B}yes${N}), ${B}2${N} ouvre sa fenêtre ; si l'appareil tourne encore, il flashe en MIDI.
+  ${B}9.${N} ${B}Éteins l'appareil, attends 2 s, rallume-le${N} : le logo, puis l'aide. (Il reste noir sinon.)
 
   Le journal de cette session : ${C}$LOG${N}
 EOF
@@ -294,6 +296,7 @@ check_usb() {
   case "$(usb_state)" in
     uboot)
       ok "Appareil JieLi 4c4a trouvé : la puce est en mode UBOOT. Étape suivante : menu 6 (sauvegarde)."
+      say "   ${B}L'écran de l'appareil reste noir dans ce mode : c'est normal.${N} Rien n'est cassé ; il en sort quand on l'éteint."
       lsblk -o NAME,SIZE,VENDOR,MODEL,TRAN | tee -a "$LOG"
       warn "Ne monte et ne formate PAS le disque qu'Ubuntu pourrait proposer." ;;
     normal)
@@ -333,6 +336,7 @@ dump_flash() {
   if [ -s "$out" ]; then
     sudo chown "$(id -u):$(id -g)" "$out" 2>/dev/null
     ok "Sauvegarde : $out ($(stat -c %s "$out") octets)"
+    say "L'appareil reste en mode UBOOT (écran noir) : menu 9 puis 10 pour écrire un firmware, ou éteins-le pour en sortir."
     sha256sum "$out" | tee -a "$LOG" | tee "$out.sha256" >/dev/null
     cp "$out" "$out.copie" && ok "Une copie de sécurité : $out.copie (mets-en une aussi sur une clé USB)"
   else
@@ -404,13 +408,20 @@ reflash() {
     say "  ${B}1${N}  Flasher ${B}ici${N}, directement avec ce firmware (M-Flasher en ligne de commande) — conseillé"
     say "  ${B}2${N}  Ouvrir la fenêtre de M-Flasher (FIRMWARE FILE > CHOOSE FILE, FLASH FIRMWARE, REVIEW & FLASH)"
     read -rp "  Choix [1/2] : " c
-    if [ "$c" = "2" ]; then run m-flasher; pause; return; fi
+    if [ "$c" = "2" ]; then
+      run m-flasher
+      say "${B}Après le flash : éteins l'appareil, attends 2 secondes, rallume-le${N} (l'écran reste noir sinon)."
+      pause; return
+    fi
     [ -n "$fw" ] || { err "Aucun firmware : menu 9."; pause; return; }
     local board=fm1; case "$fw" in *smk37*|*SMK37*|*smk-37*) board=smk37;; esac
     say "Tape ${B}yes${N} quand M-Flasher montre ce qu'il va écrire."
     run m-flasher firmware "$fw" --board "$board" --restart \
       || run sudo m-flasher firmware "$fw" --board "$board" --restart \
-      && ok "Firmware écrit : l'appareil redémarre." || err "Le flash a échoué : menu 7 pour le journal."
+      && { ok "Firmware écrit."
+           say "${B}Si l'écran reste noir : éteins l'appareil, attends 2 secondes, rallume-le.${N} (Le SMK-37 ne redémarre pas"
+           say "toujours seul après le chargeur : c'est normal.) Il doit montrer le logo, puis l'aide."; } \
+      || err "Le flash a échoué : menu 7 pour le journal."
     pause; return
   fi
   # l'appareil tourne : le flash passe par le MIDI (fm1_install.py)

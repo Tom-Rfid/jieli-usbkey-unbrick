@@ -124,6 +124,9 @@ Le flash (menu 10) : en mode UBOOT, le script passe le firmware choisi à M-Flas
 
 <img src="img/m-flasher.png" width="600" alt="M-Flasher : SMK-37 Pro / Elite, flash 1 Mio, le menu 10 du script à côté">
 
+**Après le flash, éteins l'appareil et rallume-le** : en mode chargeur son écran reste noir, et le SMK-37 ne
+redémarre pas toujours seul. Ce n'est pas une panne.
+
 ## Bon à savoir
 
 - **Garde ta sauvegarde** (sur une clé USB aussi). Ne restaure jamais la sauvegarde d'un autre appareil sur le tien :
