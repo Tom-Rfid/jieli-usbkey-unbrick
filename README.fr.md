@@ -124,6 +124,11 @@ Le flash (menu 10) : en mode UBOOT, le script passe le firmware choisi à M-Flas
 
 <img src="img/m-flasher.png" width="600" alt="M-Flasher : SMK-37 Pro / Elite, flash 1 Mio, le menu 10 du script à côté">
 
+Le menu 10, choix 1 : M-Flasher en ligne de commande lit la flash, montre ce qu'il va écrire, sauvegarde, écrit,
+vérifie et redémarre l'appareil.
+
+<img src="img/m-flasher-cli.png" width="600" alt="M-Flasher en ligne de commande : SMK-37 Elite, sauvegarde, écriture de 308 Kio vérifiée, redémarrage, SMK37 Open revu en MIDI">
+
 **Après le flash, éteins l'appareil et rallume-le** : en mode chargeur son écran reste noir, et le SMK-37 ne
 redémarre pas toujours seul. Ce n'est pas une panne.
 

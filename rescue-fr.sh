@@ -23,7 +23,7 @@ WORK="${WORK:-$HERE/rescue-work}"                    # tout ce que le script cr�
 FIRMWARE="${FIRMWARE:-}"                              # un .fwsc précis (sinon : menu 9 pour le choisir)
 FW_SMK_ELITE="${FW_SMK_ELITE:-https://github.com/Tom-Rfid/OpenVALive_SMK-37/releases/download/preview-dev/openvalive-smk37-elite-0.0.3.fwsc}"
 FW_SMK_PRO="${FW_SMK_PRO:-https://github.com/Tom-Rfid/OpenVALive_SMK-37/releases/download/preview-dev/openvalive-smk37-pro-0.0.3.fwsc}"
-FW_FM1="${FW_FM1:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/latest/download/openvalive-0.0.3.fwsc}"
+FW_FM1="${FW_FM1:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/download/preview-dev/openvalive-fm1-0.0.3.fwsc}"
 INSTALLER_URL="${INSTALLER_URL:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/latest/download/fm1_install.py}"
 JLTOOL_GIT="${JLTOOL_GIT:-https://github.com/kagaimiq/jl-uboot-tool.git}"
 MFLASHER_VERSION="${MFLASHER_VERSION:-0.12.1}"
@@ -414,7 +414,13 @@ reflash() {
       pause; return
     fi
     [ -n "$fw" ] || { err "Aucun firmware : menu 9."; pause; return; }
-    local board=fm1; case "$fw" in *smk37*|*SMK37*|*smk-37*) board=smk37;; esac
+    local board=""                              # (le nom du fichier, pas le dossier où il est)
+    case "$(basename "$fw" | tr 'A-Z' 'a-z')" in *smk37*|*smk-37*) board=smk37;; *fm1*|*fm-1*) board=fm1;; esac
+    if [ -z "$board" ]; then
+      read -rp "  Pour quel appareil est ce firmware ? 1) FM-1   2) SMK-37 : " b
+      [ "$b" = "2" ] && board=smk37 || board=fm1
+    fi
+    say "Appareil : ${B}$board${N} (d'après le nom du fichier)"
     say "Tape ${B}yes${N} quand M-Flasher montre ce qu'il va écrire."
     run m-flasher firmware "$fw" --board "$board" --restart \
       || run sudo m-flasher firmware "$fw" --board "$board" --restart \

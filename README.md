@@ -120,6 +120,11 @@ Flashing (menu 10): in UBOOT mode the script hands the chosen firmware to M-Flas
 
 <img src="img/m-flasher.png" width="600" alt="M-Flasher: SMK-37 Pro / Elite, 1 MiB flash, the script's menu 10 beside it">
 
+Menu 10, choice 1: M-Flasher's command line reads the flash, shows what it will write, backs up, writes, verifies and
+restarts the unit.
+
+<img src="img/m-flasher-cli.png" width="600" alt="M-Flasher's command line: SMK-37 Elite, backup, 308 KiB written and verified, restart, SMK37 Open back on USB MIDI">
+
 **After flashing, switch the unit off and on again**: in loader mode its screen stays dark, and the SMK-37 does not
 always restart by itself. Nothing is wrong.
 
