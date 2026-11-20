@@ -236,29 +236,53 @@ send_key() {
   say "${B}Then:${N} press Enter, the Pi sends the key for ${KEY_SECONDS} s, and ${B}DURING that time${N}"
   say "      turn the ${B}unit's switch ON${N} (ideally 1 second after Enter)."
   say "      The chip reads the key as it powers up: on before, or after the ${KEY_SECONDS} s, it does not work."
-  read -rp "  Switch OFF? Enter to start, then switch ON… " _
+  say "${R}${B}⚠ THE ORDER MATTERS:${N} ${B}1. switch the unit OFF${N}   ${B}2. Enter here${N}   ${B}3. switch it ON${N} while the key goes."
+  say "   Switched on before Enter, it boots normally (as MIDI) and the key does nothing."
+  read -rp "  Is the unit switched OFF? [y/N] " off
+  case "$off" in y|Y|o|O) ;; *) warn "Switch it off first, then menu 4 again."; pause; return ;; esac
+  read -rp "  Enter to start the key, THEN switch the unit on… " _
   sudo dmesg -C 2>/dev/null
   run sudo "$VENV/bin/python" "$WORK/usb_key.py" "$GPIO_DP" "$GPIO_DM" "$KEY_SECONDS" "$KEY_HALF_US" \
     || err "The key script failed (lgpio installed? menu 3)."
-  sleep 2
+  wait_device
   check_usb noPause
   pause
+}
+
+# the unit's USB state: uboot (4c4a, the chip's loader), normal (its firmware runs: MIDI), none
+NORMAL_IDS="3654:7756|1209:0001|smk|fm-1|m-vave|sinco|openvalive"
+usb_state() {
+  if lsusb | grep -qi "4c4a:"; then echo uboot
+  elif lsusb | grep -qiE "$NORMAL_IDS"; then echo normal
+  else echo none; fi
+}
+normal_name() { lsusb | grep -iE "$NORMAL_IDS" | head -n 1 | cut -d' ' -f6-; }
+# after the key: a few seconds for the chip to show up; nothing at all: the USB is enumerated again, once
+wait_device() {
+  for _ in 1 2 3 4 5 6; do [ "$(usb_state)" = none ] || return 0; sleep 1; done
+  say "Nothing yet: the Pi's USB is restarted once to see the devices again…"
+  for a in /sys/bus/usb/devices/usb*/authorized; do echo 0 | sudo tee "$a" >/dev/null; echo 1 | sudo tee "$a" >/dev/null; done
+  for _ in 1 2 3 4; do [ "$(usb_state)" = none ] || return 0; sleep 1; done
 }
 
 # ------------------------------------------------ 5. detection ------------------------------------------------------
 check_usb() {
   [ "$1" = "noPause" ] || title "Is the keyboard seen?"
   say "${B}lsusb:${N}"; run lsusb
-  say "${B}dmesg (last USB lines):${N}"; sudo dmesg | grep -iE "usb|4c4a|jieli|uboot|scsi|sd[a-z]" | tail -n 25 | tee -a "$LOG"
-  if lsusb | grep -qi "4c4a"; then
-    ok "JieLi 4c4a device found: the chip is in UBOOT mode. Next: menu 6 (backup)."
-    lsblk -o NAME,SIZE,VENDOR,MODEL,TRAN | tee -a "$LOG"
-    warn "Do NOT mount or format the disk the system may offer."
-  elif lsusb | grep -qiE "smk|midi|sinco"; then
-    ok "A MIDI device is seen: the keyboard may be booting. Menu 10 to flash."
-  else
-    warn "No 4c4a device. Repeat menu 4 (switch on earlier or later), or menu 8 (key settings)."
-  fi
+  say "${B}dmesg (last USB lines):${N}"; sudo dmesg | grep -iE "usb|4c4a|jieli|uboot|scsi|sd[a-z]|midi" | tail -n 25 | tee -a "$LOG"
+  case "$(usb_state)" in
+    uboot)
+      ok "JieLi 4c4a device found: the chip is in UBOOT mode. Next: menu 6 (backup)."
+      lsblk -o NAME,SIZE,VENDOR,MODEL,TRAN | tee -a "$LOG"
+      warn "Do NOT mount or format the disk the system may offer." ;;
+    normal)
+      err "The unit BOOTED NORMALLY ($(normal_name)): it runs as MIDI, not in UBOOT mode."
+      say "   It was on before the key (or switched on too late). ${B}Switch it off, menu 4, Enter, THEN switch it on.${N}"
+      say "   (The backup, menu 6, only works in UBOOT mode. To just reflash a unit that boots: menu 10, over MIDI.)" ;;
+    *)
+      warn "Nothing on USB. If the unit is on and its screen stays dark, the chip may have taken the key:"
+      say "   menu 5 again in a few seconds. Otherwise menu 4 again (switch on a little earlier or later), or menu 8 (settings)." ;;
+  esac
   [ "$1" = "noPause" ] || pause
 }
 
@@ -266,7 +290,12 @@ check_usb() {
 dump_flash() {
   title "Backing up the whole flash (dump)"
   [ -d "$WORK/jl-uboot-tool" ] || { err "jl-uboot-tool missing: menu 3 first."; pause; return; }
-  lsusb | grep -qi 4c4a || warn "No 4c4a device seen: the backup will most likely fail (menu 4)."
+  case "$(usb_state)" in
+    uboot) ;;
+    normal) err "The unit runs normally as MIDI ($(normal_name)): the backup only works in UBOOT mode (4c4a)."
+            say "   Switch it off, menu 4, Enter, THEN switch it on; menu 5 must show 4c4a."; pause; return ;;
+    *) warn "No 4c4a device seen: the backup will most likely fail (menu 4)." ;;
+  esac
   local out="$DUMPDIR/flash-$(date +%Y%m%d-%H%M%S).bin"
   say "Size: ${B}$DUMP_SIZE${N} (change it: DUMP_SIZE=0x400000 ./rescue-en.sh)"
   say "1) automatic: the script sends \"read 0 $DUMP_SIZE …\" then \"exit\" to the tool"

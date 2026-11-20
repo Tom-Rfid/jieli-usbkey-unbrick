@@ -257,29 +257,53 @@ send_key() {
   say "${B}Ensuite :${N} tu appuies sur Entrée, le Pi envoie la clé pendant ${KEY_SECONDS} s, et ${B}PENDANT ce temps${N}"
   say "          tu mets l'${B}interrupteur du clavier sur ON${N} (idéalement 1 seconde après Entrée)."
   say "          La puce lit la clé au moment où elle s'allume : allumée avant, ou après les ${KEY_SECONDS} s, ça ne marche pas."
-  read -rp "  Interrupteur sur OFF ? Entrée pour lancer, puis interrupteur sur ON… " _
+  say "${R}${B}⚠ L'ORDRE COMPTE :${N} ${B}1. ÉTEINS l'appareil${N}   ${B}2. Entrée ici${N}   ${B}3. ALLUME-le${N} pendant que la clé part."
+  say "   Allumé avant d'appuyer sur Entrée, il démarre normalement (en MIDI) et la clé ne sert à rien."
+  read -rp "  L'appareil est ÉTEINT ? [o/N] " off
+  case "$off" in o|O|y|Y) ;; *) warn "Éteins-le d'abord, puis relance le menu 4."; pause; return ;; esac
+  read -rp "  Entrée pour lancer la clé, PUIS allume l'appareil… " _
   sudo dmesg -C 2>/dev/null
   run sudo "$VENV/bin/python" "$WORK/cle_usb.py" "$GPIO_DP" "$GPIO_DM" "$KEY_SECONDS" "$KEY_HALF_US" \
     || err "Le script de clé a échoué (lgpio installé ? menu 3)."
-  sleep 2
+  wait_device
   check_usb noPause
   pause
+}
+
+# l'état USB de l'appareil : uboot (4c4a, la puce en mode chargeur), normal (son firmware tourne : MIDI), none
+NORMAL_IDS="3654:7756|1209:0001|smk|fm-1|m-vave|sinco|openvalive"
+usb_state() {
+  if lsusb | grep -qi "4c4a:"; then echo uboot
+  elif lsusb | grep -qiE "$NORMAL_IDS"; then echo normal
+  else echo none; fi
+}
+normal_name() { lsusb | grep -iE "$NORMAL_IDS" | head -n 1 | cut -d' ' -f6-; }
+# après la clé : quelques secondes pour que la puce apparaisse ; rien du tout : on refait énumérer l'USB une fois
+wait_device() {
+  for _ in 1 2 3 4 5 6; do [ "$(usb_state)" = none ] || return 0; sleep 1; done
+  say "Rien encore : l'USB du Pi est relancé une fois pour revoir les appareils…"
+  for a in /sys/bus/usb/devices/usb*/authorized; do echo 0 | sudo tee "$a" >/dev/null; echo 1 | sudo tee "$a" >/dev/null; done
+  for _ in 1 2 3 4; do [ "$(usb_state)" = none ] || return 0; sleep 1; done
 }
 
 # ------------------------------------------------ 5. détection ------------------------------------------------------
 check_usb() {
   [ "$1" = "noPause" ] || title "Le clavier est-il vu ?"
   say "${B}lsusb :${N}"; run lsusb
-  say "${B}dmesg (dernières lignes USB) :${N}"; sudo dmesg | grep -iE "usb|4c4a|jieli|uboot|scsi|sd[a-z]" | tail -n 25 | tee -a "$LOG"
-  if lsusb | grep -qi "4c4a"; then
-    ok "Appareil JieLi 4c4a trouvé : la puce est en mode UBOOT. Étape suivante : menu 6 (sauvegarde)."
-    lsblk -o NAME,SIZE,VENDOR,MODEL,TRAN | tee -a "$LOG"
-    warn "Ne monte et ne formate PAS le disque qu'Ubuntu pourrait proposer."
-  elif lsusb | grep -qiE "smk|midi|sinco"; then
-    ok "Un appareil MIDI est vu : le clavier démarre peut-être. Menu 10 pour reflasher."
-  else
-    warn "Pas d'appareil 4c4a. Recommence le menu 4 (allume plus tôt ou plus tard), ou menu 8 (réglages)."
-  fi
+  say "${B}dmesg (dernières lignes USB) :${N}"; sudo dmesg | grep -iE "usb|4c4a|jieli|uboot|scsi|sd[a-z]|midi" | tail -n 25 | tee -a "$LOG"
+  case "$(usb_state)" in
+    uboot)
+      ok "Appareil JieLi 4c4a trouvé : la puce est en mode UBOOT. Étape suivante : menu 6 (sauvegarde)."
+      lsblk -o NAME,SIZE,VENDOR,MODEL,TRAN | tee -a "$LOG"
+      warn "Ne monte et ne formate PAS le disque qu'Ubuntu pourrait proposer." ;;
+    normal)
+      err "L'appareil a DÉMARRÉ NORMALEMENT ($(normal_name)) : il tourne en MIDI, pas en mode UBOOT."
+      say "   Il était allumé avant la clé (ou trop tard). ${B}Éteins-le, relance le menu 4, Entrée, PUIS allume-le.${N}"
+      say "   (La sauvegarde, menu 6, ne passe qu'en mode UBOOT. Pour juste reflasher un appareil qui démarre : menu 10, en MIDI.)" ;;
+    *)
+      warn "Rien de vu sur l'USB. Si l'appareil est allumé et l'écran reste noir, la puce a peut-être pris la clé :"
+      say "   relance le menu 5 dans quelques secondes. Sinon recommence le menu 4 (allume un peu plus tôt ou plus tard), ou menu 8 (réglages)." ;;
+  esac
   [ "$1" = "noPause" ] || pause
 }
 
@@ -287,7 +311,12 @@ check_usb() {
 dump_flash() {
   title "Sauvegarde de toute la flash (dump)"
   [ -d "$WORK/jl-uboot-tool" ] || { err "jl-uboot-tool absent : menu 3 d'abord."; pause; return; }
-  lsusb | grep -qi 4c4a || warn "Pas d'appareil 4c4a vu : la sauvegarde va sûrement échouer (menu 4)."
+  case "$(usb_state)" in
+    uboot) ;;
+    normal) err "L'appareil tourne normalement en MIDI ($(normal_name)) : la sauvegarde ne passe qu'en mode UBOOT (4c4a)."
+            say "   Éteins-le, menu 4, Entrée, PUIS allume-le ; le menu 5 doit montrer 4c4a."; pause; return ;;
+    *) warn "Pas d'appareil 4c4a vu : la sauvegarde va sûrement échouer (menu 4)." ;;
+  esac
   local out="$DUMPDIR/flash-$(date +%Y%m%d-%H%M%S).bin"
   say "Taille demandée : ${B}$DUMP_SIZE${N} (modifiable : DUMP_SIZE=0x400000 ./rescue-fr.sh)"
   say "1) automatique : le script envoie « read 0 $DUMP_SIZE … » puis « exit » à l'outil"

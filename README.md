@@ -94,6 +94,10 @@ chmod +x rescue-en.sh
 | 9 | choose the firmware: the `.fwsc` next to the script, a custom one (path or URL), or an official one |
 | 10 | flash: M-Flasher in UBOOT mode, or over MIDI if the device still runs |
 
+**The order matters**: the unit **off**, Enter at menu 4, **then** switch it on. Switched on before, it boots normally
+as MIDI (the script recognises it and says so: `3654:7756` SMK37 Open, `1209:0001` OpenVALive FM-1…) and the key does
+nothing; the backup (menu 6) only works in UBOOT mode (`4c4a`). The FM-1 and the SMK-37 share the same loader, `4c4a:8057`.
+
 Nothing seen at step 5? Switch on a bit earlier or later, then try menu 8 (slower clock, or D+ and D− swapped).
 
 ## Good to know

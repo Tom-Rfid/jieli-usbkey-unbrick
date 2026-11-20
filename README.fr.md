@@ -97,6 +97,10 @@ chmod +x rescue-fr.sh
 | 9 | choisir le firmware : le `.fwsc` à côté du script, un personnalisé (chemin ou adresse), ou un officiel |
 | 10 | flasher : M-Flasher en mode UBOOT, ou en MIDI si l'appareil tourne encore |
 
+**L'ordre compte** : appareil **éteint**, Entrée au menu 4, **puis** allumé. Allumé avant, il démarre normalement en
+MIDI (le script le reconnaît et le dit : `3654:7756` SMK37 Open, `1209:0001` OpenVALive FM-1…) et la clé ne sert à
+rien ; la sauvegarde (menu 6) ne marche qu'en mode UBOOT (`4c4a`). Le FM-1 et le SMK-37 ont le même chargeur, `4c4a:8057`.
+
 Rien de vu à l'étape 5 ? Allume un peu plus tôt ou plus tard, puis essaie le menu 8 (horloge plus lente, ou D+ et D−
 inversés).
 
