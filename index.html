@@ -121,6 +121,8 @@
   through its own USB cable, from a Raspberry Pi, without opening it.</p>
   <p>Made for the M-VAVE SMK-37 and FM-1. Inside their chip, a factory loader still waits in the ROM; a short pattern
   on two USB wires wakes it up. Once it is awake, any flasher can rewrite the firmware.</p>
+  <p><b>Release 1.0.0</b> (20 November 2026): the whole rescue, tested and validated on the SMK-37 Elite and the FM-1.
+  <a href="https://github.com/Tom-Rfid/jieli-usbkey-unbrick/releases/latest">Download it</a>.</p>
 
   <figure class="cable">
     <svg viewBox="0 0 960 330" role="img" aria-labelledby="cable-en-t cable-en-d">
@@ -243,8 +245,9 @@ cd jieli-usbkey-unbrick
 <section aria-labelledby="state-en">
   <h2 id="state-en">What has been tested</h2>
   <div class="state">
-    <div><b>Works</b><p>M-VAVE SMK-37 Elite with a Raspberry Pi 5: key, backup, firmware written, keyboard back. M-VAVE FM-1
-      (the latest board, no logo under the screen): key and 1 MB backup (November 2026).</p></div>
+    <div><b>Tested, validated</b><p>With a Raspberry Pi 5, on the M-VAVE SMK-37 Elite and the M-VAVE FM-1 (the latest board,
+      no logo under the screen): key, 1 MB backup, firmware written from the command line and from M-Flasher's
+      window, device back (November 2026).</p></div>
     <div><b>Should work</b><p>SMK-37 Pro (same chip family, supported by M-Flasher); Raspberry Pi 4 and 3.</p></div>
     <div><b>Needs you</b><p>The key from a Pico (RP2040), on Linux and maybe Windows. Report what works.</p></div>
   </div>
@@ -308,6 +311,8 @@ cd jieli-usbkey-unbrick
   câble USB, depuis un Raspberry Pi, sans l'ouvrir.</p>
   <p>Fait pour les M-VAVE SMK-37 et FM-1. Dans leur puce, un chargeur d'usine attend encore dans la ROM ; un court
   motif sur deux fils USB le réveille. Une fois réveillé, n'importe quel outil de flash peut réécrire le firmware.</p>
+  <p><b>Version 1.0.0</b> (20 novembre 2026) : tout le sauvetage, testé et validé sur le SMK-37 Elite et le FM-1.
+  <a href="https://github.com/Tom-Rfid/jieli-usbkey-unbrick/releases/latest">La télécharger</a>.</p>
   <p>Le câblage est le schéma <a href="#en">en haut de la page</a> : noir sur la broche 9, vert par 100 Ω sur la
   broche 11 (GPIO17), blanc par 100 Ω sur la broche 13 (GPIO27), le rouge jamais.</p>
 </header>
@@ -375,8 +380,9 @@ cd jieli-usbkey-unbrick
 <section aria-labelledby="state-fr">
   <h2 id="state-fr">Ce qui a été testé</h2>
   <div class="state">
-    <div><b>Marche</b><p>M-VAVE SMK-37 Elite avec un Raspberry Pi 5 : clé, sauvegarde, firmware écrit, clavier revenu. M-VAVE
-      FM-1 (la dernière carte, sans logo sous l'écran) : clé et sauvegarde de 1 Mo (novembre 2026).</p></div>
+    <div><b>Testé, validé</b><p>Avec un Raspberry Pi 5, sur le M-VAVE SMK-37 Elite et le M-VAVE FM-1 (la dernière carte,
+      sans logo sous l'écran) : clé, sauvegarde de 1 Mo, firmware écrit en ligne de commande et par la fenêtre de
+      M-Flasher, appareil revenu (novembre 2026).</p></div>
     <div><b>Devrait marcher</b><p>SMK-37 Pro (même famille de puce, gérée par M-Flasher) ; Raspberry Pi 4 et 3.</p></div>
     <div><b>Besoin de toi</b><p>La clé depuis un Pico (RP2040), sous Linux et peut-être Windows. Dis ce qui marche.</p></div>
   </div>
