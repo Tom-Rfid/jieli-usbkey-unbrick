@@ -25,7 +25,7 @@ FW_SMK_ELITE="${FW_SMK_ELITE:-https://github.com/Tom-Rfid/OpenVALive_SMK-37/rele
 FW_SMK_PRO="${FW_SMK_PRO:-https://github.com/Tom-Rfid/OpenVALive_SMK-37/releases/download/preview-dev/openvalive-smk37-pro-0.0.3.fwsc}"
 FW_FM1="${FW_FM1:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/download/preview-dev/openvalive-fm1-0.0.3.fwsc}"
 MFLASHER_VERSION="${MFLASHER_VERSION:-0.12.1}"        # https://github.com/jvitkauskas/m-flasher
-RESCUE_VERSION="2026-11-20 c"                   # (shown in every title: which script is running)
+RESCUE_VERSION="2026-11-20 d"                   # (shown in every title: which script is running)
 INSTALLER_URL="${INSTALLER_URL:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/latest/download/fm1_install.py}"
 JLTOOL_GIT="${JLTOOL_GIT:-https://github.com/kagaimiq/jl-uboot-tool.git}"
 DUMP_SIZE="${DUMP_SIZE:-0x100000}"                    # flash size to back up (1 MB on the SMK-37 Elite)
@@ -388,6 +388,8 @@ reflash() {
     say "  ${B}2${N}  Open M-Flasher's window (FIRMWARE FILE > CHOOSE FILE, FLASH FIRMWARE, REVIEW & FLASH)"
     read -rp "  Choice [1/2]: " c
     if [ "$c" = "2" ]; then
+      say "If the window offers ${B}Install m-bootloader${N}, answer ${B}no${N}: it is not needed, keep the stock loader."
+      say "If the file cannot be chosen, close the window and open it again, or take choice ${B}1${N}."
       run m-flasher
       say "${B}After flashing: switch the unit off, wait 2 seconds, switch it on${N} (the screen stays dark otherwise)."
       pause; return

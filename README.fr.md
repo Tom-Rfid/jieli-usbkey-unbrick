@@ -129,6 +129,15 @@ vérifie et redémarre l'appareil.
 
 <img src="img/m-flasher-cli.png" width="600" alt="M-Flasher en ligne de commande : SMK-37 Elite, sauvegarde, écriture de 308 Kio vérifiée, redémarrage, SMK37 Open revu en MIDI">
 
+Le même choix 1 sur un FM-1 : « Appareil : fm1 » d'après le nom du fichier, le chargeur M-VAVE d'origine gardé,
+200 Kio écrits et vérifiés, l'OpenVALive FM-1 revu en MIDI.
+
+<img src="img/m-flasher-cli-fm1.png" width="600" alt="M-Flasher en ligne de commande : FM-1, bootloader stock, sauvegarde, écriture de 200 Kio vérifiée, OpenVALive FM-1 revu en MIDI">
+
+Si la fenêtre de M-Flasher (choix 2) propose « Install m-bootloader », **réponds non** : ce n'est pas nécessaire,
+les deux choix flashent avec le chargeur d'origine. Si le fichier ne se laisse pas choisir, ferme la fenêtre et
+relance-la, ou prends le choix 1.
+
 **Après le flash, éteins l'appareil et rallume-le** : en mode chargeur son écran reste noir, et le SMK-37 ne
 redémarre pas toujours seul. Ce n'est pas une panne.
 

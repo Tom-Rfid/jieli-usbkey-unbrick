@@ -125,6 +125,14 @@ restarts the unit.
 
 <img src="img/m-flasher-cli.png" width="600" alt="M-Flasher's command line: SMK-37 Elite, backup, 308 KiB written and verified, restart, SMK37 Open back on USB MIDI">
 
+The same choice 1 on an FM-1 (French script shown): the unit read from the file name (fm1), the stock M-VAVE loader
+kept, 200 KiB written and verified, the OpenVALive FM-1 back on USB MIDI.
+
+<img src="img/m-flasher-cli-fm1.png" width="600" alt="M-Flasher's command line: FM-1, stock bootloader, backup, 200 KiB written and verified, OpenVALive FM-1 back on USB MIDI">
+
+If M-Flasher's window (choice 2) offers "Install m-bootloader", **answer no**: it is not needed, both choices flash
+with the stock loader. If the file cannot be chosen, close the window and open it again, or take choice 1.
+
 **After flashing, switch the unit off and on again**: in loader mode its screen stays dark, and the SMK-37 does not
 always restart by itself. Nothing is wrong.
 

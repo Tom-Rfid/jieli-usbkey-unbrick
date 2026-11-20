@@ -27,7 +27,7 @@ FW_FM1="${FW_FM1:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/download/
 INSTALLER_URL="${INSTALLER_URL:-https://github.com/Tom-Rfid/OpenVALive_FM-1/releases/latest/download/fm1_install.py}"
 JLTOOL_GIT="${JLTOOL_GIT:-https://github.com/kagaimiq/jl-uboot-tool.git}"
 MFLASHER_VERSION="${MFLASHER_VERSION:-0.12.1}"
-RESCUE_VERSION="2026-11-20 c"                   # (shown in every title: which script is running)
+RESCUE_VERSION="2026-11-20 d"                   # (shown in every title: which script is running)
 DUMP_SIZE="${DUMP_SIZE:-0x100000}"                    # taille de la flash à sauvegarder (1 Mo sur le SMK-37 Elite)
 KEY_SECONDS="${KEY_SECONDS:-6}"                       # durée d'envoi de la clé
 KEY_HALF_US="${KEY_HALF_US:-10}"                      # demi-période de l'horloge en µs (10 ≈ 50 kHz ; 25 plus lent)
@@ -410,6 +410,8 @@ reflash() {
     say "  ${B}2${N}  Ouvrir la fenêtre de M-Flasher (FIRMWARE FILE > CHOOSE FILE, FLASH FIRMWARE, REVIEW & FLASH)"
     read -rp "  Choix [1/2] : " c
     if [ "$c" = "2" ]; then
+      say "Si la fenêtre propose ${B}Install m-bootloader${N}, réponds ${B}non${N} : il n'en a pas besoin, garde le chargeur d'origine."
+      say "Si le fichier ne se laisse pas choisir, ferme la fenêtre et relance-la, ou prends le choix ${B}1${N}."
       run m-flasher
       say "${B}Après le flash : éteins l'appareil, attends 2 secondes, rallume-le${N} (l'écran reste noir sinon)."
       pause; return
