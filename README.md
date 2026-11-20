@@ -115,6 +115,11 @@ The backup (menu 6): the WL82 chip (AC791N series), its SPI NOR flash read whole
 
 <img src="img/uboot-dump.png" width="600" alt="jl-uboot-tool: WL82 AC791N, loader installed, reading 100 % 1.00M">
 
+Flashing (menu 10): in UBOOT mode the script hands the chosen firmware to M-Flasher's command line
+(`m-flasher firmware file.fwsc --board smk37 --restart`, you type `yes`), or opens its window:
+
+<img src="img/m-flasher.png" width="600" alt="M-Flasher: SMK-37 Pro / Elite, 1 MiB flash, the script's menu 10 beside it">
+
 ## Good to know
 
 - **Keep your backup** (on a USB stick too). Never restore another unit's backup onto yours: the key calibration is

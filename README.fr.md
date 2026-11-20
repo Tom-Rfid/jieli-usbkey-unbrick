@@ -119,6 +119,11 @@ La sauvegarde (menu 6) : la puce WL82 (série AC791N), sa flash SPI NOR lue en e
 
 <img src="img/uboot-dump.png" width="600" alt="jl-uboot-tool : WL82 AC791N, loader installé, lecture 100 % 1.00M">
 
+Le flash (menu 10) : en mode UBOOT, le script passe le firmware choisi à M-Flasher en ligne de commande
+(`m-flasher firmware fichier.fwsc --board smk37 --restart`, tu tapes `yes`), ou ouvre sa fenêtre :
+
+<img src="img/m-flasher.png" width="600" alt="M-Flasher : SMK-37 Pro / Elite, flash 1 Mio, le menu 10 du script à côté">
+
 ## Bon à savoir
 
 - **Garde ta sauvegarde** (sur une clé USB aussi). Ne restaure jamais la sauvegarde d'un autre appareil sur le tien :

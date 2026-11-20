@@ -360,26 +360,35 @@ settings() {
 }
 
 # ------------------------------------------------ 9. flash ----------------------------------------------------------
+# the .fwsc files next to the script or in the folder above (the unzipped firmware's folder)
+local_fwsc() { ls "$HERE"/*.fwsc "$HERE"/../*.fwsc 2>/dev/null | while read -r f; do readlink -f "$f"; done | sort -u; }
 find_firmware() {
   if [ -n "$FIRMWARE" ] && [ -f "$FIRMWARE" ]; then echo "$FIRMWARE"; return; fi
-  local n; n=$(ls "$HERE"/*.fwsc 2>/dev/null | wc -l)
-  [ "$n" = "1" ] && ls "$HERE"/*.fwsc
+  local n; n=$(local_fwsc | grep -c .)
+  [ "$n" = "1" ] && local_fwsc
 }
 
 reflash() {
   title "Flashing the firmware"
   if lsusb | grep -qi "4c4a:"; then             # UBOOT mode: M-Flasher (JieLi USB/SCSI protocol)
     ok "Unit in UBOOT mode ($(lsusb | grep -i 4c4a: | head -n 1 | cut -d' ' -f6-))"
-    say "In UBOOT mode, flashing goes through ${B}M-Flasher${N} (a graphical tool):"
-    say "  1. it first saves a backup by itself (AUTO BACKUP SAVED);"
-    say "  2. FIRMWARE FILE > CHOOSE FILE: take ${B}$(find_firmware || echo "the .fwsc chosen in menu 9")${N};"
-    say "  3. FLASH FIRMWARE, then REVIEW & FLASH. The bootloader is not touched;"
-    say "  4. the calibration (C1) and the pairings (7B) stay as they are."
     command -v m-flasher >/dev/null 2>&1 || install_mflasher || return
-    read -rp "  Open M-Flasher? [y/N] " c
-    [[ "$c" == "y" || "$c" == "Y" ]] || { warn "Cancelled."; pause; return; }
     sudo modprobe sg 2>/dev/null                  # (the generic SCSI driver it uses)
-    run m-flasher
+    local fw; fw="$(find_firmware)"
+    [ -n "$fw" ] || { warn "No firmware chosen yet: menu 9 first."; choose_fw; fw="$(find_firmware)"; title "Flashing the firmware"; }
+    say "Firmware: ${B}${fw:-none}${N}"
+    say "Flashing goes through ${B}M-Flasher${N}. It first backs up the whole flash (AUTO BACKUP), leaves the bootloader,"
+    say "the calibration (C1) and the pairings (7B) alone, then restarts the unit."
+    say "  ${B}1${N}  Flash ${B}here${N}, straight with this firmware (M-Flasher's command line) — recommended"
+    say "  ${B}2${N}  Open M-Flasher's window (FIRMWARE FILE > CHOOSE FILE, FLASH FIRMWARE, REVIEW & FLASH)"
+    read -rp "  Choice [1/2]: " c
+    if [ "$c" = "2" ]; then run m-flasher; pause; return; fi
+    [ -n "$fw" ] || { err "No firmware: menu 9."; pause; return; }
+    local board=fm1; case "$fw" in *smk37*|*SMK37*|*smk-37*) board=smk37;; esac
+    say "Type ${B}yes${N} when M-Flasher shows what it will write."
+    run m-flasher firmware "$fw" --board "$board" --restart \
+      || run sudo m-flasher firmware "$fw" --board "$board" --restart \
+      && ok "Firmware written: the unit restarts." || err "Flashing failed: menu 7 for the log."
     pause; return
   fi
   # the unit runs: flashing goes over MIDI (fm1_install.py)
@@ -400,15 +409,24 @@ reflash() {
 # ------------------------------------------------ 10. choose the firmware -------------------------------------------
 choose_fw() {
   title "Choose the firmware to flash"
-  local n; n=$(ls "$HERE"/*.fwsc 2>/dev/null | wc -l)
-  say "  ${B}1${N}  The .fwsc next to the script (there must be exactly ONE; found: $n)"
+  local n; n=$(local_fwsc | grep -c .)
+  say "  ${B}1${N}  The .fwsc next to the script or in the folder above (found: $n)"
   say "  ${B}2${N}  A custom .fwsc: a path on this Pi, or an https://… address"
+  say "       e.g. ${C}~/Downloads/openvalive-smk37-elite-0.0.3.fwsc${N}"
+  say "       e.g. ${C}$FW_SMK_ELITE${N}"
   say "  ${B}3${N}  The official OpenVALive firmware: SMK-37 Elite / SMK-37 Pro / FM-1"
   read -rp "  Choice [1/2/3]: " c
   case "$c" in
-    1) if [ "$n" = "1" ]; then FIRMWARE="$(ls "$HERE"/*.fwsc)"; ok "Chosen: $FIRMWARE"
-       else err "There must be exactly one .fwsc in $HERE (there are $n)."; fi ;;
+    1) if [ "$n" = "1" ]; then FIRMWARE="$(local_fwsc)"; ok "Chosen: $FIRMWARE"
+       elif [ "$n" = "0" ]; then err "No .fwsc in $HERE nor in the folder above."
+       else
+         local i=1; while read -r f; do say "     $i) $f"; i=$((i + 1)); done < <(local_fwsc)
+         read -rp "  Which one? " k
+         FIRMWARE="$(local_fwsc | sed -n "${k}p")"
+         [ -n "$FIRMWARE" ] && ok "Chosen: $FIRMWARE" || err "Not a valid choice."
+       fi ;;
     2) read -rp "  Path or address: " src
+       src="${src/#\~/$HOME}"
        if [ -f "$src" ]; then FIRMWARE="$src"; ok "Chosen: $FIRMWARE"
        elif [[ "$src" == http* ]]; then
          local out="$WORK/$(basename "${src%%\?*}")"
